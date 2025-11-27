@@ -34,13 +34,13 @@ MACROS:
 //V!() - Variável (retorna valor da variável)
 //B!() - Booleano (retorna valor booleano)
 //Exemplos:
-M!(5 + 10 * 2) // Retorna 25
+M!(5 + M!(10 * 2)) // Retorna 25
 V!(variavel_1) // Retorna o valor da variável 'variavel_1'
-B!(variavel_2 == 100) // Retorna true ou false
+B!(V!(variavel_2) == 100) // Retorna true ou false
 //Exemplo completo:
 FN:main{
-    U32 : variavel_1 = M!(5 + 10 * 2);
-    Bool : variavel_2 = B!(variavel_1 == 25);
+    U32 : variavel_1 = M!(5 + M!(10 * 2));
+    Bool : variavel_2 = B!(V!(variavel_1) == 25);
     String : mensagem = "O valor de variavel_1 é: ";
     // Imprimir mensagem (ainda não implementado, mas futuramente terá uma função de print)
     //PRINT: C!(V!(mensagem),V!(variavel_1));
