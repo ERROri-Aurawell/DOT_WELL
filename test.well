@@ -1,36 +1,11 @@
-VAR:Bool:boleano = B!(B!(1 == 1) != false );
+VAR:U8:variavelll=0;
 
-VAR:U32:numero = M!(M!(100 + 100) * 100);
+FN:funcao2{
+    CHANGE:variavelll:M!(V!(variavelll) + 1);
 
-//Pra fazer função eu tenho que resolver escopo antes, deixa pra depois
-FN:funcao{
-VAR:Bool:boleano2 = B!(B!(1 == 1) != false);
-VAR:U32:numero2 = M!(M!(100 + 100) * 100);
-VAR:String:palavras1 = "111111111111";
-VAR:String:palavras2 = "222222222222";
-
-DROP:palavras1;
-DROP:palavras2;
+    IF:B!(V!(variavelll) == 3):BREAK;
 }FN;
 
-VAR:U32:numero3 = M!(M!(100 + 100) * 100);
+//EXECUTE:funcao2;
 
-VAR:Bool:teste = B!(M!(1 + 1) == 2); //Essa linha dá defeito //Não deve dar mais
- 
-FN:otaFuncao{
-VAR:Bool:boleano2 = B!(B!(1 == 1) != false);
-VAR:U32:numero2 = M!(M!(100 + 100) * 100);
-VAR:String:palavras = "Texto kk";
-//DROP:boleano2;
-//DROP:numero2;
-}FN;
-
-DROP:boleano;
-DROP:numero;
-DROP:numero3;
-
-//EXECUTE:otaFuncao;
-
-IF:true:funcao;
-
-IF:B!(2 != 3):funcao;
+WHILE:B!(V!(variavelll) <= 10 ):funcao2;

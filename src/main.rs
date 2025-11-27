@@ -83,11 +83,10 @@ unsafe fn create_var(
 
 unsafe fn remover_var(pool: &mut Vec<Variable>, var_ptr: *const Variable) {
     if let Some(pos) = pool.iter().position(|v| v as *const Variable == var_ptr) {
-    
         match pool[pos].ponteiro {
             Pointers::Bool(ptr) => {
                 let _ = Box::from_raw(ptr);
-            } 
+            }
             Pointers::U8(ptr) => {
                 let _ = Box::from_raw(ptr);
             }
@@ -118,7 +117,6 @@ fn processar_linha(linha: &str) -> String {
     let mut escape = false;
 
     while let Some(c) = chars.next() {
-
         if dentro_string {
             if escape {
                 resultado.push(c);
@@ -151,7 +149,7 @@ fn processar_linha(linha: &str) -> String {
 
         if c == '/' {
             if let Some('/') = chars.peek() {
-                break; 
+                break;
             }
         }
 
@@ -304,7 +302,6 @@ fn eval_m(s: &str, pool: &Vec<Variable>) -> Result<f64, String> {
 
     loop {
         if let Some((start, end, content)) = extract_m_macro(&result) {
-
             let inner_value = eval_m(&content, pool)?;
 
             result.replace_range(start..end, &inner_value.to_string());
@@ -320,7 +317,6 @@ fn eval_m(s: &str, pool: &Vec<Variable>) -> Result<f64, String> {
 }
 
 fn eval_b(s: &str, pool: &Vec<Variable>) -> Result<bool, String> {
-
     let mut result = s.to_string();
 
     while let Some((start, end, var_name)) = extract_v_macro(&result) {
@@ -358,6 +354,7 @@ unsafe fn interpretar(
     escopos: &mut Vec<Escopo>,
     ignore_next: &mut bool,
     valid_function: &mut bool,
+    loop_function_checker: &mut bool,
 ) {
     println!(" ----------\n Interpretando linha: {} \n", linha);
 
@@ -398,6 +395,8 @@ unsafe fn interpretar(
                     return;
                 }
             };
+
+            println!("Código interno: {}", codigo);
 
             let escopo = Escopo {
                 nome: nome.to_string(),
@@ -757,6 +756,7 @@ unsafe fn interpretar(
 
             if let Some(codigo) = codigo_funcao {
                 println!("Função encontrada! Código: {}", codigo);
+                let mut foi_quebrado = false;
                 for instrucao in codigo.split(';') {
                     let instrucao = instrucao.trim();
                     if instrucao.is_empty() {
@@ -764,7 +764,14 @@ unsafe fn interpretar(
                     }
 
                     unsafe {
-                        interpretar(instrucao, pool, escopos, ignore_next, valid_function);
+                        interpretar(
+                            instrucao,
+                            pool,
+                            escopos,
+                            ignore_next,
+                            valid_function,
+                            &mut foi_quebrado,
+                        );
                     }
                 }
             } else {
@@ -813,6 +820,7 @@ unsafe fn interpretar(
                 }
 
                 if let Some(codigo) = codigo_funcao {
+                    let mut foi_quebrado = false;
                     println!("Função encontrada! Código: {}", codigo);
                     for instrucao in codigo.split(';') {
                         let instrucao = instrucao.trim();
@@ -820,18 +828,111 @@ unsafe fn interpretar(
                             continue;
                         }
                         unsafe {
-                            interpretar(instrucao, pool, escopos, ignore_next, valid_function);
+                            interpretar(
+                                instrucao,
+                                pool,
+                                escopos,
+                                ignore_next,
+                                valid_function,
+                                &mut foi_quebrado,
+                            );
                         }
                     }
                 } else {
-                    println!("Função '{}' não encontrada.", funcao_str);
+                    if funcao_str == "BREAK".to_string() {
+                        println!("MANDOU QUEBRAR \n\n\n\n");
+                        *loop_function_checker = true;
+                    } else {
+                        println!("Função '{}' não encontrada.", funcao_str);
+                    }
                 }
             } else {
                 println!("Condição falsa, não executando função: {}", funcao_str_);
             }
         }
+        "WHILE" => {
+            let (condicao_str, funcao_str_) = match resto.split_once(':') {
+                Some(v) => v,
+                None => {
+                    println!("Erro: linha sem ':' → {}", linha);
+                    return;
+                }
+            };
+
+            let mut condicao_resultado = check_condition(condicao_str, pool);
+
+            let mut foi_quebrado = false;
+
+            while condicao_resultado {
+                let funcao_str = funcao_str_.trim();
+                println!("Condição verdadeira, executando função: {}", funcao_str);
+
+                let mut codigo_funcao = None;
+                for function in escopos.iter() {
+                    if function.nome == funcao_str {
+                        codigo_funcao = Some(function.codigo.clone());
+                        break;
+                    }
+                }
+
+                if let Some(codigo) = codigo_funcao {
+                    println!("Função encontrada! Código: {}", codigo);
+                    for instrucao in codigo.split(';') {
+                        let instrucao = instrucao.trim();
+                        if instrucao.is_empty() {
+                            continue;
+                        }
+
+                        if foi_quebrado {
+                            println!("Quebrei o loop");
+                            break;
+                        }
+
+                        unsafe {
+                            interpretar(
+                                instrucao,
+                                pool,
+                                escopos,
+                                ignore_next,
+                                valid_function,
+                                &mut foi_quebrado,
+                            );
+                        }
+                    }
+                } else {
+                    println!("Função '{}' não encontrada.", funcao_str);
+                }
+
+                if foi_quebrado {
+                    condicao_resultado = false;
+                } else {
+                    condicao_resultado = check_condition(condicao_str, pool);
+                };
+            }
+        }
         _ => {}
     };
+}
+
+fn check_condition(condicao_str: &str, pool: &mut Vec<Variable>) -> bool {
+    if condicao_str.starts_with("B!(") || condicao_str.starts_with("V!(") {
+        match eval_b(condicao_str, pool) {
+            Ok(v) => v,
+            Err(e) => {
+                println!("Erro ao avaliar condição: {}", e);
+                return false;
+            }
+        }
+    } else {
+        match condicao_str {
+            "true" => true,
+            "false" => false,
+            _ => {
+                println!("Condição inválida para IF: {}", condicao_str);
+                return false;
+            }
+        }
+    }
 }
 unsafe fn read_variables(pool: &mut Vec<Variable>) {
     println!("\n---- Variáveis alocadas ----");
@@ -892,6 +993,8 @@ fn main() {
 
         let mut valid_function = true;
 
+        let mut foi_quebrado = false;
+
         for instrucao in resultado.split(';') {
             let instrucao = instrucao.trim();
             if instrucao.is_empty() {
@@ -905,13 +1008,14 @@ fn main() {
                     &mut escopos,
                     &mut ignore_next,
                     &mut valid_function,
+                    &mut foi_quebrado,
                 );
             }
         }
 
         read_variables(&mut pool);
 
-        // Não esquecer 
+        // Não esquecer
         for var in &pool {
             var.destruidor();
         }
