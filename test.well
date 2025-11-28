@@ -1,11 +1,17 @@
-VAR:U8:variavelll=0;
+VAR:String:palavras = "Texto kk";
 
-FN:funcao2{
-    CHANGE:variavelll:M!(V!(variavelll) + 1);
+VAR:String:palavras2 = 'texto ll';
 
-    IF:B!(V!(variavelll) == 3):BREAK;
-}FN;
+VAR:String:palavras3 = T!(V!(palavras2) " " V!(palavras) " " B!(3 == 3) " " M!(400 + 300) );
 
-//EXECUTE:funcao2;
+VAR:String:palavras4 = T!(V!(palavras));
 
-WHILE:B!(V!(variavelll) <= 10 ):funcao2;
+VAR:U32:numero3 = M!(M!(100 + 100) * 100);
+
+PRINT:V!(numero3);
+
+PRINT:V!(palavras3);
+
+VAR:String:entrada=INSERT;
+
+PRINT:V!(entrada);

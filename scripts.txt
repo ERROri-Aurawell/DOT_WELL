@@ -14,7 +14,6 @@ DROP:palavras2;
 }FN;
 
 
-
 VAR:U32:numero3 = M!(M!(100 + 100) * 100);
 
 VAR:Bool:teste = B!(M!(1 + 1) == 2); //Essa linha dá defeito //Não deve dar mais
@@ -36,3 +35,16 @@ DROP:numero3;
 IF:true:funcao;
 
 IF:B!(2 != 3):funcao;
+
+VAR:U8:variavelll=0;
+
+FN:funcao2{
+    CHANGE:variavelll:M!(V!(variavelll) + 1);
+
+    IF:B!(V!(variavelll) == 3):BREAK;
+}FN;
+
+//EXECUTE:funcao2;
+
+WHILE:B!(V!(variavelll) <= 10 ):funcao2;
+DROP:variavelll;

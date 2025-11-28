@@ -109,6 +109,7 @@ unsafe fn remover_var(pool: &mut Vec<Variable>, var_ptr: *const Variable) {
 }
 
 fn processar_linha(linha: &str) -> String {
+    //println!("Processando linha: {}", linha);
     let mut resultado = String::new();
     let mut chars = linha.chars().peekable();
 
@@ -153,9 +154,9 @@ fn processar_linha(linha: &str) -> String {
             }
         }
 
-        if c == ' ' || c == '\t' {
-            continue;
-        }
+        // if c == ' ' || c == '\t' {
+        //   continue;
+        //}
 
         resultado.push(c);
     }
@@ -215,7 +216,7 @@ fn extract_v_macro(s: &str) -> Option<(usize, usize, String)> {
                         depth -= 1;
                         if depth == 0 {
                             let end_content = j;
-                            let content = s[start_content..end_content].trim().to_string();
+                            let content = s[start_content..end_content].to_string();
                             return Some((i, j + 1, content));
                         }
                     }
@@ -268,24 +269,51 @@ fn extract_b_macro(s: &str) -> Option<(usize, usize, String)> {
     None
 }
 
+fn extract_t_macro(s: &str) -> Option<(usize, usize, String)> {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+
+    while i + 2 < bytes.len() {
+        if bytes[i] == b'T' && bytes[i + 1] == b'!' && bytes[i + 2] == b'(' {
+            let start_content = i + 3;
+            let mut depth = 1;
+            let mut j = start_content;
+
+            while j < bytes.len() {
+                match bytes[j] {
+                    b'(' => depth += 1,
+                    b')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            let end_content = j;
+                            let content = s[start_content..end_content].trim().to_string();
+                            return Some((i, j + 1, content));
+                        }
+                    }
+                    _ => {}
+                }
+                j += 1;
+            }
+
+            return None;
+        }
+
+        i += 1;
+    }
+
+    None
+}
+
 fn find_var_value(name: &str, pool: &Vec<Variable>) -> Result<String, String> {
     for var in pool {
         if var.nome == name {
             return Ok(match &var.valor {
-                Values::Bool(v) => {
-                    //println!("{}", v);
-                    (if *v { 1 } else { 0 }).to_string()
-                }
+                Values::Bool(v) => (if *v { 1 } else { 0 }).to_string(),
                 Values::U8(v) => v.to_string(),
                 Values::I8(v) => v.to_string(),
                 Values::U32(v) => v.to_string(),
                 Values::I32(v) => v.to_string(),
-                Values::String(_) => {
-                    return Err(format!(
-                        "Variável '{}' é uma String e não pode ser usada em expressões numéricas.",
-                        name
-                    ));
-                }
+                Values::String(v) => v.clone(),
             });
         }
     }
@@ -348,6 +376,33 @@ fn eval_b(s: &str, pool: &Vec<Variable>) -> Result<bool, String> {
     }
 }
 
+fn transform_to_string(s: &str, pool: &Vec<Variable>) -> Result<String, String> {
+    let mut result = s.to_string();
+
+    while let Some((start, end, var_name)) = extract_v_macro(&result) {
+        let var_value = find_var_value(&var_name, pool)?;
+        result.replace_range(start..end, &var_value);
+    }
+
+    while let Some((start, end, content)) = extract_m_macro(&result) {
+        let inner_value = eval_m(&content, pool)?;
+        result.replace_range(start..end, &inner_value.to_string());
+    }
+
+    while let Some((start, end, content)) = extract_b_macro(&result) {
+        let inner_value = eval_b(&content, pool)?;
+        result.replace_range(start..end, if inner_value { "true" } else { "false" });
+    }
+
+    while let Some((start, end, content)) = extract_t_macro(&result) {
+        let inner_value = transform_to_string(&content, pool)?;
+        result.replace_range(start..end, &inner_value);
+    }
+    //println!("Transformado para String: {}", result);
+
+    Ok(result)
+}
+
 unsafe fn interpretar(
     linha: &str,
     pool: &mut Vec<Variable>,
@@ -356,7 +411,7 @@ unsafe fn interpretar(
     valid_function: &mut bool,
     loop_function_checker: &mut bool,
 ) {
-    println!(" ----------\n Interpretando linha: {} \n", linha);
+    //println!(" ----------\n Interpretando linha: {} \n", linha);
 
     let linha = linha.trim_end_matches(';').trim();
 
@@ -477,6 +532,7 @@ unsafe fn interpretar(
                     return;
                 }
             };
+
             let valor = match tipo {
                 Types::Bool => {
                     if valor_str.starts_with("V!(") || valor_str.starts_with("B!(") {
@@ -580,14 +636,41 @@ unsafe fn interpretar(
                 }
 
                 Types::String => {
-                    // Deve vir entre aspas
-                    if !(valor_str.starts_with('"') && valor_str.ends_with('"')) {
-                        println!("String precisa estar entre aspas: {}", valor_str);
-                        return;
-                    }
+                    if valor_str == "INSERT".to_string() {
+                        let mut console_input = String::new();
+                        println!("Insira uma string para a variável '{}': ", nome_str);
+                        match std::io::stdin().read_line(&mut console_input) {
+                            Ok(_) => {
+                                let conteudo = console_input.trim_end().to_string();
+                                Values::String(conteudo)
+                            }
+                            Err(e) => {
+                                println!("Erro ao ler entrada do console: {}", e);
+                                return;
+                            }
+                        }
 
-                    let conteudo = valor_str[1..valor_str.len() - 1].to_string();
-                    Values::String(conteudo)
+                        //Values::String(console_input)
+                    } else if valor_str.starts_with("T!(") {
+                        match transform_to_string(valor_str, pool) {
+                            Ok(v) => Values::String(v),
+                            Err(e) => {
+                                println!("Erro ao transformar para String: {}", e);
+                                return;
+                            }
+                        }
+                    } else {
+                        // Deve vir entre aspas
+                        if (valor_str.starts_with('"') && valor_str.ends_with('"'))
+                            || (valor_str.starts_with('\'') && valor_str.ends_with('\''))
+                        {
+                            let conteudo = valor_str[1..valor_str.len() - 1].to_string();
+                            Values::String(conteudo)
+                        } else {
+                            println!("String precisa estar entre aspas: {}", valor_str);
+                            return;
+                        }
+                    }
                 }
             };
 
@@ -755,7 +838,7 @@ unsafe fn interpretar(
             }
 
             if let Some(codigo) = codigo_funcao {
-                println!("Função encontrada! Código: {}", codigo);
+                //println!("Função encontrada! Código: {}", codigo);
                 let mut foi_quebrado = false;
                 for instrucao in codigo.split(';') {
                     let instrucao = instrucao.trim();
@@ -821,7 +904,7 @@ unsafe fn interpretar(
 
                 if let Some(codigo) = codigo_funcao {
                     let mut foi_quebrado = false;
-                    println!("Função encontrada! Código: {}", codigo);
+                    //println!("Função encontrada! Código: {}", codigo);
                     for instrucao in codigo.split(';') {
                         let instrucao = instrucao.trim();
                         if instrucao.is_empty() {
@@ -840,14 +923,13 @@ unsafe fn interpretar(
                     }
                 } else {
                     if funcao_str == "BREAK".to_string() {
-                        println!("MANDOU QUEBRAR \n\n\n\n");
                         *loop_function_checker = true;
                     } else {
                         println!("Função '{}' não encontrada.", funcao_str);
                     }
                 }
             } else {
-                println!("Condição falsa, não executando função: {}", funcao_str_);
+                //println!("Condição falsa, não executando função: {}", funcao_str_);
             }
         }
         "WHILE" => {
@@ -865,7 +947,7 @@ unsafe fn interpretar(
 
             while condicao_resultado {
                 let funcao_str = funcao_str_.trim();
-                println!("Condição verdadeira, executando função: {}", funcao_str);
+                //println!("Condição verdadeira, executando função: {}", funcao_str);
 
                 let mut codigo_funcao = None;
                 for function in escopos.iter() {
@@ -876,7 +958,7 @@ unsafe fn interpretar(
                 }
 
                 if let Some(codigo) = codigo_funcao {
-                    println!("Função encontrada! Código: {}", codigo);
+                    //println!("Função encontrada! Código: {}", codigo);
                     for instrucao in codigo.split(';') {
                         let instrucao = instrucao.trim();
                         if instrucao.is_empty() {
@@ -884,7 +966,7 @@ unsafe fn interpretar(
                         }
 
                         if foi_quebrado {
-                            println!("Quebrei o loop");
+                            //println!("Quebrei o loop");
                             break;
                         }
 
@@ -900,7 +982,7 @@ unsafe fn interpretar(
                         }
                     }
                 } else {
-                    println!("Função '{}' não encontrada.", funcao_str);
+                    //println!("Função '{}' não encontrada.", funcao_str);
                 }
 
                 if foi_quebrado {
@@ -908,6 +990,17 @@ unsafe fn interpretar(
                 } else {
                     condicao_resultado = check_condition(condicao_str, pool);
                 };
+            }
+        }
+        "PRINT" => {
+            let conteudo = resto.trim();
+            match transform_to_string(conteudo, pool) {
+                Ok(v) => {
+                    println!("{}", v);
+                }
+                Err(e) => {
+                    println!("Erro ao transformar para String: {}", e);
+                }
             }
         }
         _ => {}
@@ -928,7 +1021,7 @@ fn check_condition(condicao_str: &str, pool: &mut Vec<Variable>) -> bool {
             "true" => true,
             "false" => false,
             _ => {
-                println!("Condição inválida para IF: {}", condicao_str);
+                //println!("Condição inválida para IF: {}", condicao_str);
                 return false;
             }
         }
@@ -995,6 +1088,8 @@ fn main() {
 
         let mut foi_quebrado = false;
 
+        println!(" \n\nCONSOLE OUTPUT: \n");
+
         for instrucao in resultado.split(';') {
             let instrucao = instrucao.trim();
             if instrucao.is_empty() {
@@ -1013,7 +1108,7 @@ fn main() {
             }
         }
 
-        read_variables(&mut pool);
+        //read_variables(&mut pool);
 
         // Não esquecer
         for var in &pool {
