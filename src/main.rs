@@ -1,6 +1,6 @@
 use evalexpr::*;
+use regex::{Captures, Regex};
 use std::fs;
-
 use std::ptr;
 
 enum Types {
@@ -660,14 +660,44 @@ unsafe fn interpretar(
                             }
                         }
                     } else {
+                        let (quoted, unquoted) = separate_quoted_and_unquoted(valor_str);
+
+                        //println!("{quoted}, {unquoted}");
                         // Deve vir entre aspas
-                        if (valor_str.starts_with('"') && valor_str.ends_with('"'))
-                            || (valor_str.starts_with('\'') && valor_str.ends_with('\''))
+                        if (quoted.starts_with('"') && quoted.ends_with('"'))
+                            || (quoted.starts_with('\'') && quoted.ends_with('\''))
                         {
-                            let conteudo = valor_str[1..valor_str.len() - 1].to_string();
-                            Values::String(conteudo)
+                            let mut conteudo = quoted[1..quoted.len() - 1].to_string();
+
+                            //println!("{}",unquoted.len());
+
+                            if unquoted.len() == 0 {
+                                Values::String(conteudo)
+                            } else {
+                                if !unquoted.contains("<") || !unquoted.contains("/>") {
+                                    println!("Funções de string mal definidas: {}", unquoted);
+                                    return;
+                                }
+
+                                let functions: Vec<String> = separate_string_functions(unquoted);
+
+                                for func in functions {
+                                    let func = func.as_str();
+                                    match func {
+                                        "TOUPPERCASE" => {
+                                            conteudo = conteudo.to_uppercase();
+                                        }
+                                        "TOLOWERCASE" => {
+                                            conteudo = conteudo.to_lowercase();
+                                        }
+                                        _ => {}
+                                    }
+                                }
+
+                                Values::String(conteudo)
+                            }
                         } else {
-                            println!("String precisa estar entre aspas: {}", valor_str);
+                            println!("String precisa estar entre aspas: {}", quoted);
                             return;
                         }
                     }
@@ -680,7 +710,7 @@ unsafe fn interpretar(
             for var in pool.iter() {
                 if var.nome == resto {
                     remover_var(pool, var as *const Variable);
-                    println!("Variável '{}' removida.", resto);
+                    //println!("Variável '{}' removida.", resto);
                     return;
                 }
             }
@@ -695,7 +725,7 @@ unsafe fn interpretar(
                 }
             };
 
-            println!("transformar {} em {}", variavel, novo_valor);
+            //println!("transformar {} em {}", variavel, novo_valor);
 
             let mut position = 0;
             for var in pool.iter() {
@@ -1007,6 +1037,59 @@ unsafe fn interpretar(
     };
 }
 
+fn separate_string_functions(input: String) -> Vec<String> {
+    let valores: String = input.chars().skip(1).collect();
+    let valores: String = valores.chars().rev().skip(2).collect();
+    let valores: String = valores.chars().rev().collect();
+
+    let functions: Vec<String> = valores.split(",").map(|s| s.to_string()).collect();
+
+    functions
+}
+
+fn separate_quoted_and_unquoted(input: &str) -> (String, String) {
+    let mut quoted: String = "\"".to_string();
+    let mut unquoted: String = "".to_string();
+
+    let characters: Vec<char> = input.chars().collect();
+
+    let init_char: char = characters[0];
+    let mut string_end: bool = false;
+
+    let mut counter = 0;
+    for i in characters {
+        if counter == 0 {
+            counter += 1;
+            continue;
+        };
+        let character = i.to_string();
+        //println!("{character}");
+
+        if i == init_char {
+            //println!("CARACTERE DE FINALIZAÇÂO");
+            quoted = quoted + init_char.to_string().as_str();
+            string_end = true;
+        }
+
+        if !string_end {
+            quoted = quoted + character.as_str();
+        } else {
+            if character == ":".to_string()
+                || character == " ".to_string()
+                || character == init_char.to_string()
+            {
+                continue;
+            }
+
+            unquoted = unquoted + character.as_str();
+        }
+    }
+
+    let unquoted = unquoted.trim().to_string();
+
+    (quoted, unquoted)
+}
+
 fn check_condition(condicao_str: &str, pool: &mut Vec<Variable>) -> bool {
     if condicao_str.starts_with("B!(") || condicao_str.starts_with("V!(") {
         match eval_b(condicao_str, pool) {
@@ -1115,5 +1198,8 @@ fn main() {
             var.destruidor();
         }
         pool.clear();
+    }
+    loop {
+        // Mantém o console aberto
     }
 }

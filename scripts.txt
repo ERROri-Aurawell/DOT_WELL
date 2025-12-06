@@ -48,3 +48,22 @@ FN:funcao2{
 
 WHILE:B!(V!(variavelll) <= 10 ):funcao2;
 DROP:variavelll;
+
+
+VAR:String:palavras = "Texto kk";
+
+VAR:String:palavras2 = 'texto ll';
+
+VAR:String:palavras3 = T!(V!(palavras2) " " V!(palavras) " " B!(3 == 3) " " M!(400 + 300) );
+
+VAR:String:palavras4 = T!(V!(palavras));
+
+VAR:U32:numero3 = M!(M!(100 + 100) * 100);
+
+PRINT:V!(numero3);
+
+PRINT:V!(palavras3);
+
+VAR:String:entrada=INSERT;
+
+PRINT:V!(entrada);

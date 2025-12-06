@@ -1,17 +1,11 @@
-VAR:String:palavras = "Texto kk";
+VAR: String: testandoUppercase = "texto pequeno" : <TOUPPERCASE/> ;
 
-VAR:String:palavras2 = 'texto ll';
+VAR: String: testandoSemUppercase = "texto Sem Nada";
 
-VAR:String:palavras3 = T!(V!(palavras2) " " V!(palavras) " " B!(3 == 3) " " M!(400 + 300) );
+VAR: String: DEIXAMINUSCULO = "TEXTO GRANDE" : <TOLOWERCASE/>;
 
-VAR:String:palavras4 = T!(V!(palavras));
+PRINT:V!(testandoUppercase);
 
-VAR:U32:numero3 = M!(M!(100 + 100) * 100);
+PRINT:V!(testandoSemUppercase);
 
-PRINT:V!(numero3);
-
-PRINT:V!(palavras3);
-
-VAR:String:entrada=INSERT;
-
-PRINT:V!(entrada);
+PRINT:V!(DEIXAMINUSCULO);
