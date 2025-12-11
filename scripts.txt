@@ -87,3 +87,19 @@ U8: variavelu8 = 254;
 
 //testeBooleano = true;
 //PRINT:V!(testeBooleano);
+
+CHANGE:variavelu8: variavelu8 + 1; //Isso causa um buffer overflow, vai voltar pra 0
+
+variavelu8 = 1 + variavelu8;
+
+PRINT:V!(variavelu8);
+
+    U8:contador = 0;
+FN:funcao{
+    IF:contador >= 10 : BREAK;
+
+    contador = contador + 1;
+    PRINT:V!(contador);
+}FN;
+
+WHILE:true:funcao;

@@ -1,10 +1,10 @@
-# Projeto DOT_WELL (V2)
+# Projeto DOT_WELL (V2.1)
 
 DOT_WELL é uma linguagem de programação interpretada, inspirada em linguagens como Rust, C e JavaScript. Ela é projetada para ser explícita e fortemente tipada.
 
 ## Características Principais
 - **Tipagem Estática Forte**: Todas as variáveis devem ter seus tipos definidos explicitamente no momento da criação.
-- **Sintaxe Simplificada**: A V2 introduz uma maneira mais limpa e direta de declarar e modificar variáveis.
+- **Sintaxe Simplificada**: A V2 introduziu uma forma mais limpa de declarar variáveis, e a V2.1 aprimora a modificação de valores com operadores de atribuição e incremento.
 - **Controle de Fluxo**: Suporte para condicionais (`IF`) e laços de repetição (`WHILE`).
 - **Funções**: Permite a definição e chamada de blocos de código reutilizáveis.
 - **Macros para Expressões**: Avaliação de expressões matemáticas, booleanas e de acesso a variáveis através de macros.
@@ -30,13 +30,24 @@ A declaração de variáveis é feita informando o tipo, nome e valor.
 U32:numero = 100;
 Bool:verdadeiro = true;
 String:mensagem = "Olá, mundo!";
+```
 
-// Alterando o valor de uma variável
+#### Modificação de Variáveis
+A V2.1 introduz operadores de atribuição e incremento/decremento para uma manipulação mais fluida das variáveis.
+
+**Sintaxe:**
+`nome_da_variavel operador valor;`
+
+**Operadores Suportados:**
+- Atribuição simples: `=`
+- Atribuição com operação: `+=`, `-=`, `*=`, `/=`
+- Incremento/Decremento: `++`, `--`
+
+**Exemplos:**
+```
 numero = 200;
-// ou usando o comando CHANGE
-CHANGE:numero:300;
-
-// Removendo uma variável
+numero += 50; // numero agora é 250
+numero--; // numero agora é 249
 DROP:numero;
 ```
 

@@ -100,3 +100,169 @@ pub fn change_var_value(pool: &mut Vec<Variable>, position: usize, novo_valor: &
         }
     };
 }
+
+pub fn soma_1(pool: &mut Vec<Variable>, position: usize) {
+    let novo_valor = format!("{} + 1", pool[position].nome);
+    let novo_valor = &novo_valor;
+
+    pool[position].valor = match pool[position].tipo {
+        Types::U8 => {
+            let response = catch_real_values(novo_valor, pool, 2);
+
+            match response {
+                Ok(r) => match r {
+                    Values::U8(r) => Values::U8(r),
+                    _ => {
+                        println!("Retorno inválido para tipo U8");
+                        return;
+                    }
+                },
+                Err(r) => {
+                    println!("Erro ao avaliar expressão: {}", r);
+                    return;
+                }
+            }
+        }
+
+        Types::I8 => {
+            let response = catch_real_values(novo_valor, pool, 3);
+
+            match response {
+                Ok(r) => match r {
+                    Values::I8(r) => Values::I8(r),
+                    _ => {
+                        println!("Retorno inválido para tipo I8");
+                        return;
+                    }
+                },
+                Err(r) => {
+                    println!("Erro ao avaliar expressão: {}", r);
+                    return;
+                }
+            }
+        }
+
+        Types::U32 => {
+            let response = catch_real_values(novo_valor, pool, 4);
+
+            match response {
+                Ok(r) => match r {
+                    Values::U32(r) => Values::U32(r),
+                    _ => {
+                        println!("Retorno inválido para tipo U32");
+                        return;
+                    }
+                },
+                Err(r) => {
+                    println!("Erro ao avaliar expressão: {}", r);
+                    return;
+                }
+            }
+        }
+
+        Types::I32 => {
+            let response = catch_real_values(novo_valor, pool, 5);
+
+            match response {
+                Ok(r) => match r {
+                    Values::I32(r) => Values::I32(r),
+                    _ => {
+                        println!("Retorno inválido para tipo I32");
+                        return;
+                    }
+                },
+                Err(r) => {
+                    println!("Erro ao avaliar expressão: {}", r);
+                    return;
+                }
+            }
+        }
+        _ => {
+            println!("Strings e Booleanos não são incrementáveis, isso nem faz sentido!");
+            return;
+        }
+    }
+}
+
+pub fn subtrai_1(pool: &mut Vec<Variable>, position: usize) {
+    let novo_valor = format!("{} - 1", pool[position].nome);
+    let novo_valor = &novo_valor;
+
+    pool[position].valor = match pool[position].tipo {
+        Types::U8 => {
+            let response = catch_real_values(novo_valor, pool, 2);
+
+            match response {
+                Ok(r) => match r {
+                    Values::U8(r) => Values::U8(r),
+                    _ => {
+                        println!("Retorno inválido para tipo U8");
+                        return;
+                    }
+                },
+                Err(r) => {
+                    println!("Erro ao avaliar expressão: {}", r);
+                    return;
+                }
+            }
+        }
+
+        Types::I8 => {
+            let response = catch_real_values(novo_valor, pool, 3);
+
+            match response {
+                Ok(r) => match r {
+                    Values::I8(r) => Values::I8(r),
+                    _ => {
+                        println!("Retorno inválido para tipo I8");
+                        return;
+                    }
+                },
+                Err(r) => {
+                    println!("Erro ao avaliar expressão: {}", r);
+                    return;
+                }
+            }
+        }
+
+        Types::U32 => {
+            let response = catch_real_values(novo_valor, pool, 4);
+
+            match response {
+                Ok(r) => match r {
+                    Values::U32(r) => Values::U32(r),
+                    _ => {
+                        println!("Retorno inválido para tipo U32");
+                        return;
+                    }
+                },
+                Err(r) => {
+                    println!("Erro ao avaliar expressão: {}", r);
+                    return;
+                }
+            }
+        }
+
+        Types::I32 => {
+            let response = catch_real_values(novo_valor, pool, 5);
+
+            match response {
+                Ok(r) => match r {
+                    Values::I32(r) => Values::I32(r),
+                    _ => {
+                        println!("Retorno inválido para tipo I32");
+                        return;
+                    }
+                },
+                Err(r) => {
+                    println!("Erro ao avaliar expressão: {}", r);
+                    return;
+                }
+            }
+        }
+        _ => {
+            println!("Strings e Booleanos não são decrementáveis, isso nem faz sentido!");
+            return;
+        }
+    }
+}

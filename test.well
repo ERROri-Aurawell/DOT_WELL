@@ -1,7 +1,13 @@
 U8: variavelu8 = 255;
 
-CHANGE:variavelu8: variavelu8 + 1; //Isso causa um buffer overflow, vai voltar pra 0
+variavelu8 = 126;
 
-variavelu8 = 1 + variavelu8;
+variavelu8 *=2;
+
+variavelu8 = variavelu8 + 1;
+
+variavelu8 += 1;
+
+variavelu8++;
 
 PRINT:V!(variavelu8);
