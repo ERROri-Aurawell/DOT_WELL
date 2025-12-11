@@ -67,3 +67,23 @@ PRINT:V!(palavras3);
 VAR:String:entrada=INSERT;
 
 PRINT:V!(entrada);
+
+
+String: testeAbstraindoPalavras = "Testo teste";
+
+VAR: String: DEIXAMINUSCULO = "TEXTO GRANDE" : <TOLOWERCASE/>;
+
+U8: numero1 = 10;
+
+//PRINT:V!(numero1);
+
+Bool: booleano = numero1 == numero1;
+
+Bool: testeBooleano = true == booleano;
+
+CHANGE:testeBooleano: 1 - 1;
+
+U8: variavelu8 = 254;
+
+//testeBooleano = true;
+//PRINT:V!(testeBooleano);

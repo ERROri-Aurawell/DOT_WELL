@@ -1,407 +1,18 @@
-use evalexpr::*;
-use regex::{Captures, Regex};
 use std::fs;
-use std::ptr;
 
-enum Types {
-    Bool,
-    U8,
-    I8,
-    U32,
-    I32,
-    String,
-}
+mod v1;
 
-enum Values {
-    Bool(bool),
-    U8(u8),
-    I8(i8),
-    U32(u32),
-    I32(i32),
-    String(String),
-}
+mod v2;
 
-enum Pointers {
-    Bool(*mut bool),
-    U8(*mut u8),
-    I8(*mut i8),
-    U32(*mut u32),
-    I32(*mut i32),
-    String(*mut String),
-}
-struct Variable {
-    valor: Values,
-    tipo: Types,
-    ponteiro: Pointers,
-    nome: String,
-}
+use v1::evals::*;
+use v1::parse_var_command::var_manipulator;
+use v1::prepare_text::processar_linha;
+use v1::string_manipulator::separate_quoted_and_unquoted;
+use v1::string_manipulator::*;
+use v1::var_maker::*;
 
-struct Escopo {
-    nome: String,
-    codigo: String,
-}
-
-impl Variable {
-    unsafe fn destruidor(&self) {
-        match self.ponteiro {
-            Pointers::Bool(ptr) => ptr::drop_in_place(ptr),
-            Pointers::U8(ptr) => ptr::drop_in_place(ptr),
-            Pointers::I8(ptr) => ptr::drop_in_place(ptr),
-            Pointers::U32(ptr) => ptr::drop_in_place(ptr),
-            Pointers::I32(ptr) => ptr::drop_in_place(ptr),
-            Pointers::String(ptr) => ptr::drop_in_place(ptr),
-        }
-    }
-}
-
-unsafe fn create_var(
-    tipo: Types,
-    valor: Values,
-    nome: &str,
-    pool: &mut Vec<Variable>,
-) -> *const Variable {
-    let ponteiro = match &valor {
-        Values::Bool(v) => Pointers::Bool(Box::into_raw(Box::new(*v))),
-        Values::U8(v) => Pointers::U8(Box::into_raw(Box::new(*v))),
-        Values::I8(v) => Pointers::I8(Box::into_raw(Box::new(*v))),
-        Values::U32(v) => Pointers::U32(Box::into_raw(Box::new(*v))),
-        Values::I32(v) => Pointers::I32(Box::into_raw(Box::new(*v))),
-        Values::String(v) => Pointers::String(Box::into_raw(Box::new(v.clone()))),
-    };
-
-    let var = Variable {
-        valor,
-        tipo,
-        ponteiro,
-        nome: nome.to_string(),
-    };
-
-    pool.push(var);
-
-    pool.last().unwrap() as *const Variable
-}
-
-unsafe fn remover_var(pool: &mut Vec<Variable>, var_ptr: *const Variable) {
-    if let Some(pos) = pool.iter().position(|v| v as *const Variable == var_ptr) {
-        match pool[pos].ponteiro {
-            Pointers::Bool(ptr) => {
-                let _ = Box::from_raw(ptr);
-            }
-            Pointers::U8(ptr) => {
-                let _ = Box::from_raw(ptr);
-            }
-            Pointers::I8(ptr) => {
-                let _ = Box::from_raw(ptr);
-            }
-            Pointers::U32(ptr) => {
-                let _ = Box::from_raw(ptr);
-            }
-            Pointers::I32(ptr) => {
-                let _ = Box::from_raw(ptr);
-            }
-            Pointers::String(ptr) => {
-                let _ = Box::from_raw(ptr);
-            }
-        }
-
-        pool.remove(pos);
-    }
-}
-
-fn processar_linha(linha: &str) -> String {
-    //println!("Processando linha: {}", linha);
-    let mut resultado = String::new();
-    let mut chars = linha.chars().peekable();
-
-    let mut dentro_string = false;
-    let mut asp = '\0';
-    let mut escape = false;
-
-    while let Some(c) = chars.next() {
-        if dentro_string {
-            if escape {
-                resultado.push(c);
-                escape = false;
-                continue;
-            }
-
-            if c == '\\' {
-                escape = true;
-                resultado.push(c);
-                continue;
-            }
-
-            if c == asp {
-                dentro_string = false;
-                resultado.push(c);
-                continue;
-            }
-
-            resultado.push(c);
-            continue;
-        }
-
-        if c == '"' || c == '\'' {
-            dentro_string = true;
-            asp = c;
-            resultado.push(c);
-            continue;
-        }
-
-        if c == '/' {
-            if let Some('/') = chars.peek() {
-                break;
-            }
-        }
-
-        // if c == ' ' || c == '\t' {
-        //   continue;
-        //}
-
-        resultado.push(c);
-    }
-
-    resultado
-}
-
-fn extract_m_macro(s: &str) -> Option<(usize, usize, String)> {
-    let bytes = s.as_bytes();
-    let mut i = 0;
-
-    while i + 2 < bytes.len() {
-        if bytes[i] == b'M' && bytes[i + 1] == b'!' && bytes[i + 2] == b'(' {
-            let start_content = i + 3;
-            let mut depth = 1;
-            let mut j = start_content;
-
-            while j < bytes.len() {
-                match bytes[j] {
-                    b'(' => depth += 1,
-                    b')' => {
-                        depth -= 1;
-                        if depth == 0 {
-                            let end_content = j;
-                            let content = s[start_content..end_content].to_string();
-                            return Some((i, j + 1, content));
-                        }
-                    }
-                    _ => {}
-                }
-                j += 1;
-            }
-
-            return None;
-        }
-
-        i += 1;
-    }
-
-    None
-}
-
-fn extract_v_macro(s: &str) -> Option<(usize, usize, String)> {
-    let bytes = s.as_bytes();
-    let mut i = 0;
-
-    while i + 2 < bytes.len() {
-        if bytes[i] == b'V' && bytes[i + 1] == b'!' && bytes[i + 2] == b'(' {
-            let start_content = i + 3;
-            let mut depth = 1;
-            let mut j = start_content;
-
-            while j < bytes.len() {
-                match bytes[j] {
-                    b'(' => depth += 1,
-                    b')' => {
-                        depth -= 1;
-                        if depth == 0 {
-                            let end_content = j;
-                            let content = s[start_content..end_content].to_string();
-                            return Some((i, j + 1, content));
-                        }
-                    }
-                    _ => {}
-                }
-                j += 1;
-            }
-
-            return None;
-        }
-
-        i += 1;
-    }
-
-    None
-}
-
-fn extract_b_macro(s: &str) -> Option<(usize, usize, String)> {
-    let bytes = s.as_bytes();
-    let mut i = 0;
-
-    while i + 2 < bytes.len() {
-        if bytes[i] == b'B' && bytes[i + 1] == b'!' && bytes[i + 2] == b'(' {
-            let start_content = i + 3;
-            let mut depth = 1;
-            let mut j = start_content;
-
-            while j < bytes.len() {
-                match bytes[j] {
-                    b'(' => depth += 1,
-                    b')' => {
-                        depth -= 1;
-                        if depth == 0 {
-                            let end_content = j;
-                            let content = s[start_content..end_content].trim().to_string();
-                            return Some((i, j + 1, content));
-                        }
-                    }
-                    _ => {}
-                }
-                j += 1;
-            }
-
-            return None;
-        }
-
-        i += 1;
-    }
-
-    None
-}
-
-fn extract_t_macro(s: &str) -> Option<(usize, usize, String)> {
-    let bytes = s.as_bytes();
-    let mut i = 0;
-
-    while i + 2 < bytes.len() {
-        if bytes[i] == b'T' && bytes[i + 1] == b'!' && bytes[i + 2] == b'(' {
-            let start_content = i + 3;
-            let mut depth = 1;
-            let mut j = start_content;
-
-            while j < bytes.len() {
-                match bytes[j] {
-                    b'(' => depth += 1,
-                    b')' => {
-                        depth -= 1;
-                        if depth == 0 {
-                            let end_content = j;
-                            let content = s[start_content..end_content].trim().to_string();
-                            return Some((i, j + 1, content));
-                        }
-                    }
-                    _ => {}
-                }
-                j += 1;
-            }
-
-            return None;
-        }
-
-        i += 1;
-    }
-
-    None
-}
-
-fn find_var_value(name: &str, pool: &Vec<Variable>) -> Result<String, String> {
-    for var in pool {
-        if var.nome == name {
-            return Ok(match &var.valor {
-                Values::Bool(v) => (if *v { 1 } else { 0 }).to_string(),
-                Values::U8(v) => v.to_string(),
-                Values::I8(v) => v.to_string(),
-                Values::U32(v) => v.to_string(),
-                Values::I32(v) => v.to_string(),
-                Values::String(v) => v.clone(),
-            });
-        }
-    }
-    Err(format!("Variável '{}' não encontrada.", name))
-}
-
-fn eval_m(s: &str, pool: &Vec<Variable>) -> Result<f64, String> {
-    let mut result = s.to_string();
-
-    while let Some((start, end, var_name)) = extract_v_macro(&result) {
-        let var_value = find_var_value(&var_name, pool)?;
-        result.replace_range(start..end, &var_value);
-    }
-
-    loop {
-        if let Some((start, end, content)) = extract_m_macro(&result) {
-            let inner_value = eval_m(&content, pool)?;
-
-            result.replace_range(start..end, &inner_value.to_string());
-        } else {
-            let value = eval(&result).map_err(|e| e.to_string())?;
-            return match value {
-                Value::Float(f) => Ok(f),
-                Value::Int(i) => Ok(i as f64),
-                _ => Err("A expressão não resultou em um número.".to_string()),
-            };
-        }
-    }
-}
-
-fn eval_b(s: &str, pool: &Vec<Variable>) -> Result<bool, String> {
-    let mut result = s.to_string();
-
-    while let Some((start, end, var_name)) = extract_v_macro(&result) {
-        let var_value = find_var_value(&var_name, pool)?;
-        result.replace_range(start..end, &var_value);
-    }
-
-    while let Some((start, end, content)) = extract_m_macro(&result) {
-        let inner_value = eval_m(&content, pool)?;
-        result.replace_range(start..end, &inner_value.to_string());
-    }
-
-    loop {
-        if let Some((start, end, content)) = extract_b_macro(&result) {
-            let inner_value = eval_b(&content, pool)?;
-            result.replace_range(start..end, if inner_value { "1" } else { "0" });
-        } else {
-            result = result.replace("true", "1");
-            result = result.replace("false", "0");
-
-            let value = eval(&result).map_err(|e| e.to_string())?;
-            return match value {
-                Value::Float(f) => Ok(f != 0.0),
-                Value::Int(i) => Ok(i != 0),
-                Value::Boolean(b) => Ok(b),
-                _ => Err("A expressão não resultou em um valor booleano.".to_string()),
-            };
-        }
-    }
-}
-
-fn transform_to_string(s: &str, pool: &Vec<Variable>) -> Result<String, String> {
-    let mut result = s.to_string();
-
-    while let Some((start, end, var_name)) = extract_v_macro(&result) {
-        let var_value = find_var_value(&var_name, pool)?;
-        result.replace_range(start..end, &var_value);
-    }
-
-    while let Some((start, end, content)) = extract_m_macro(&result) {
-        let inner_value = eval_m(&content, pool)?;
-        result.replace_range(start..end, &inner_value.to_string());
-    }
-
-    while let Some((start, end, content)) = extract_b_macro(&result) {
-        let inner_value = eval_b(&content, pool)?;
-        result.replace_range(start..end, if inner_value { "true" } else { "false" });
-    }
-
-    while let Some((start, end, content)) = extract_t_macro(&result) {
-        let inner_value = transform_to_string(&content, pool)?;
-        result.replace_range(start..end, &inner_value);
-    }
-    //println!("Transformado para String: {}", result);
-
-    Ok(result)
-}
+use v2::change_var_value::change_var_value;
+use v2::parse_values::catch_real_values;
 
 unsafe fn interpretar(
     linha: &str,
@@ -435,10 +46,13 @@ unsafe fn interpretar(
     let (metodo, resto) = match linha.split_once(":") {
         Some(v) => v,
         None => {
-            println!("Método inválido → {} ", linha);
-            return;
+            ("", linha)
+            //println!("Método inválido → {} ", linha);
+            //return;
         }
     };
+
+    //println!("{metodo}");
 
     match metodo {
         "FN" => {
@@ -451,7 +65,7 @@ unsafe fn interpretar(
                 }
             };
 
-            println!("Código interno: {}", codigo);
+            //println!("Código interno: {}", codigo);
 
             let escopo = Escopo {
                 nome: nome.to_string(),
@@ -472,15 +86,7 @@ unsafe fn interpretar(
 
             return;
         }
-        "VAR" => {
-            let (tipo_str, resto) = match resto.split_once(':') {
-                Some(v) => v,
-                None => {
-                    println!("Erro: linha sem ':' → {}", linha);
-                    return;
-                }
-            };
-
+        "String" | "U8" | "I8" | "U32" | "I32" | "Bool" => {
             let (nome_str, valor_str) = match resto.split_once('=') {
                 Some(v) => v,
                 None => {
@@ -489,7 +95,7 @@ unsafe fn interpretar(
                 }
             };
 
-            let tipo_str = tipo_str.trim();
+            let tipo_str = metodo.trim();
             let nome_str = nome_str.trim();
             let valor_str = valor_str.trim();
 
@@ -535,102 +141,91 @@ unsafe fn interpretar(
 
             let valor = match tipo {
                 Types::Bool => {
-                    if valor_str.starts_with("V!(") || valor_str.starts_with("B!(") {
-                        match eval_b(valor_str, pool) {
-                            Ok(v) => Values::Bool(v),
-                            Err(e) => {
-                                println!("Erro ao avaliar expressão: {}", e);
-                                return;
-                            }
-                        }
-                    } else {
-                        match valor_str {
-                            "true" => Values::Bool(true),
-                            "false" => Values::Bool(false),
+                    let response = catch_real_values(valor_str, pool, 1);
+
+                    match response {
+                        Ok(r) => match r {
+                            Values::Bool(r) => Values::Bool(r),
                             _ => {
-                                println!("Valor inválido para Bool: {}", valor_str);
+                                println!("Retorno inválido para tipo Bool");
                                 return;
                             }
+                        },
+                        Err(r) => {
+                            println!("Erro ao avaliar expressão: {}", r);
+                            return;
                         }
                     }
                 }
 
                 Types::U8 => {
-                    if valor_str.starts_with("M!(") || valor_str.starts_with("V!(") {
-                        match eval_m(valor_str, pool) {
-                            Ok(v) => Values::U8(v as u8),
-                            Err(e) => {
-                                println!("Erro ao avaliar expressão: {}", e);
+                    let response = catch_real_values(valor_str, pool, 2);
+
+                    match response {
+                        Ok(r) => match r {
+                            Values::U8(r) => Values::U8(r),
+                            _ => {
+                                println!("Retorno inválido para tipo U8");
                                 return;
                             }
-                        }
-                    } else {
-                        match valor_str.parse::<u8>() {
-                            Ok(v) => Values::U8(v),
-                            Err(e) => {
-                                println!("Erro ao converter valor para U8: {}", e);
-                                return;
-                            }
+                        },
+                        Err(r) => {
+                            println!("Erro ao avaliar expressão: {}", r);
+                            return;
                         }
                     }
                 }
 
                 Types::I8 => {
-                    if valor_str.starts_with("M!(") || valor_str.starts_with("V!(") {
-                        match eval_m(valor_str, pool) {
-                            Ok(v) => Values::I8(v as i8),
-                            Err(e) => {
-                                println!("Erro ao avaliar expressão: {}", e);
+                    let response = catch_real_values(valor_str, pool, 3);
+
+                    match response {
+                        Ok(r) => match r {
+                            Values::I8(r) => Values::I8(r),
+                            _ => {
+                                println!("Retorno inválido para tipo I8");
                                 return;
                             }
-                        }
-                    } else {
-                        match valor_str.parse::<i8>() {
-                            Ok(v) => Values::I8(v),
-                            Err(e) => {
-                                println!("Erro ao converter valor para I8: {}", e);
-                                return;
-                            }
+                        },
+                        Err(r) => {
+                            println!("Erro ao avaliar expressão: {}", r);
+                            return;
                         }
                     }
                 }
 
                 Types::U32 => {
-                    if valor_str.starts_with("M!(") || valor_str.starts_with("V!(") {
-                        match eval_m(valor_str, pool) {
-                            Ok(v) => Values::U32(v as u32),
-                            Err(e) => {
-                                println!("Erro ao avaliar expressão: {}", e);
+                    let response = catch_real_values(valor_str, pool, 4);
+
+                    match response {
+                        Ok(r) => match r {
+                            Values::U32(r) => Values::U32(r),
+                            _ => {
+                                println!("Retorno inválido para tipo I8");
                                 return;
                             }
-                        }
-                    } else {
-                        match valor_str.parse::<u32>() {
-                            Ok(v) => Values::U32(v),
-                            Err(e) => {
-                                println!("Erro ao converter valor para U32: {}", e);
-                                return;
-                            }
+                        },
+                        Err(r) => {
+                            println!("Erro ao avaliar expressão: {}", r);
+                            return;
                         }
                     }
                 }
 
                 Types::I32 => {
-                    if valor_str.starts_with("M!(") || valor_str.starts_with("V!(") {
-                        match eval_m(valor_str, pool) {
-                            Ok(v) => Values::I32(v as i32),
-                            Err(e) => {
-                                println!("Erro ao avaliar expressão: {}", e);
+                    let response = catch_real_values(valor_str, pool, 5);
+
+                    match response {
+                        Ok(r) => match r {
+                            Values::I32(r) => Values::I32(r),
+                            _ => {
+                                println!("Retorno inválido para tipo I8");
                                 return;
                             }
-                        }
-                    } else {
-                        match valor_str.parse::<i32>() {
-                            Ok(v) => Values::I32(v),
-                            Err(e) => {
-                                println!("Erro ao converter valor para I32: {}", e);
-                                return;
-                            }
+                        },
+                        Err(r) => {
+                            println!("Erro ao avaliar expressão: {}", r);
+                            return;
                         }
                     }
                 }
@@ -706,6 +301,12 @@ unsafe fn interpretar(
 
             create_var(tipo, valor, nome_str, pool);
         }
+
+        // Vou apagar isso depois, ou não também, sou indeciso
+        "VAR" => {
+            var_manipulator(resto, linha, pool);
+        }
+
         "DROP" => {
             for var in pool.iter() {
                 if var.nome == resto {
@@ -740,120 +341,7 @@ unsafe fn interpretar(
                 return;
             }
 
-            pool[position].valor = match pool[position].tipo {
-                Types::Bool => {
-                    if novo_valor.starts_with("V!(") {
-                        match eval_m(novo_valor, pool) {
-                            Ok(v) => match v {
-                                1.0 => Values::Bool(true),
-                                0.0 => Values::Bool(false),
-                                _ => {
-                                    println!("Valor inválido para Bool: {}", v);
-                                    return;
-                                }
-                            },
-                            Err(e) => {
-                                println!("Erro ao avaliar expressão: {}", e);
-                                return;
-                            }
-                        }
-                    } else {
-                        match novo_valor {
-                            "true" => Values::Bool(true),
-                            "false" => Values::Bool(false),
-                            _ => {
-                                println!("Valor inválido para Bool: {}", novo_valor);
-                                return;
-                            }
-                        }
-                    }
-                }
-                Types::U8 => {
-                    if novo_valor.starts_with("M!(") || novo_valor.starts_with("V!(") {
-                        match eval_m(novo_valor, pool) {
-                            Ok(v) => Values::U8(v as u8),
-                            Err(e) => {
-                                println!("Erro ao avaliar expressão: {}", e);
-                                return;
-                            }
-                        }
-                    } else {
-                        match novo_valor.parse::<u8>() {
-                            Ok(v) => Values::U8(v),
-                            Err(e) => {
-                                println!("Erro ao converter valor para U8: {}", e);
-                                return;
-                            }
-                        }
-                    }
-                }
-
-                Types::I8 => {
-                    if novo_valor.starts_with("M!(") || novo_valor.starts_with("V!(") {
-                        match eval_m(novo_valor, pool) {
-                            Ok(v) => Values::I8(v as i8),
-                            Err(e) => {
-                                println!("Erro ao avaliar expressão: {}", e);
-                                return;
-                            }
-                        }
-                    } else {
-                        match novo_valor.parse::<i8>() {
-                            Ok(v) => Values::I8(v),
-                            Err(e) => {
-                                println!("Erro ao converter valor para I8: {}", e);
-                                return;
-                            }
-                        }
-                    }
-                }
-
-                Types::U32 => {
-                    if novo_valor.starts_with("M!(") || novo_valor.starts_with("V!(") {
-                        match eval_m(novo_valor, pool) {
-                            Ok(v) => Values::U32(v as u32),
-                            Err(e) => {
-                                println!("Erro ao avaliar expressão: {}", e);
-                                return;
-                            }
-                        }
-                    } else {
-                        match novo_valor.parse::<u32>() {
-                            Ok(v) => Values::U32(v),
-                            Err(e) => {
-                                println!("Erro ao converter valor para U32: {}", e);
-                                return;
-                            }
-                        }
-                    }
-                }
-
-                Types::I32 => {
-                    if novo_valor.starts_with("M!(") || novo_valor.starts_with("V!(") {
-                        match eval_m(novo_valor, pool) {
-                            Ok(v) => Values::I32(v as i32),
-                            Err(e) => {
-                                println!("Erro ao avaliar expressão: {}", e);
-                                return;
-                            }
-                        }
-                    } else {
-                        match novo_valor.parse::<i32>() {
-                            Ok(v) => Values::I32(v),
-                            Err(e) => {
-                                println!("Erro ao converter valor para I32: {}", e);
-                                return;
-                            }
-                        }
-                    }
-                }
-                _ => {
-                    println!(
-                        "String não pode ser alterada com CHANGE. Use DROP e crie uma nova variável. Não estoure a memória!"
-                    );
-                    return;
-                }
-            };
+            change_var_value(pool, position, novo_valor);
         }
 
         "EXECUTE" => {
@@ -900,25 +388,7 @@ unsafe fn interpretar(
                 }
             };
 
-            let condicao_resultado =
-                if condicao_str.starts_with("B!(") || condicao_str.starts_with("V!(") {
-                    match eval_b(condicao_str, pool) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            println!("Erro ao avaliar condição: {}", e);
-                            return;
-                        }
-                    }
-                } else {
-                    match condicao_str {
-                        "true" => true,
-                        "false" => false,
-                        _ => {
-                            println!("Condição inválida para IF: {}", condicao_str);
-                            return;
-                        }
-                    }
-                };
+            let condicao_resultado = check_condition(condicao_str, pool);
 
             if condicao_resultado {
                 let funcao_str = funcao_str_.trim();
@@ -1033,122 +503,62 @@ unsafe fn interpretar(
                 }
             }
         }
+        "" => {
+            println!("Nenhum método informado, chutando o que deveria acontecer: ");
+
+            let characters: Vec<char> = resto.chars().collect();
+            let mut resto: String = "".to_string();
+            for i in characters {
+                if i.to_string() != " ".to_string() {
+                    resto = resto + &i.to_string();
+                }
+            }
+
+            let (variavel, novo_valor) = match resto.split_once('=') {
+                Some(v) => v,
+                None => {
+                    return;
+                }
+            };
+
+            println!("transformar {} em {}", variavel, novo_valor);
+
+            let mut position = 0;
+            for var in pool.iter() {
+                if var.nome == variavel {
+                    break;
+                }
+                position += 1;
+            }
+
+            if position == pool.len() {
+                println!("Variável '{}' não encontrada para alteração.", variavel);
+                return;
+            }
+
+            change_var_value(pool, position, novo_valor);
+        }
         _ => {}
     };
 }
 
-fn separate_string_functions(input: String) -> Vec<String> {
-    let valores: String = input.chars().skip(1).collect();
-    let valores: String = valores.chars().rev().skip(2).collect();
-    let valores: String = valores.chars().rev().collect();
-
-    let functions: Vec<String> = valores.split(",").map(|s| s.to_string()).collect();
-
-    functions
-}
-
-fn separate_quoted_and_unquoted(input: &str) -> (String, String) {
-    let mut quoted: String = "\"".to_string();
-    let mut unquoted: String = "".to_string();
-
-    let characters: Vec<char> = input.chars().collect();
-
-    let init_char: char = characters[0];
-    let mut string_end: bool = false;
-
-    let mut counter = 0;
-    for i in characters {
-        if counter == 0 {
-            counter += 1;
-            continue;
-        };
-        let character = i.to_string();
-        //println!("{character}");
-
-        if i == init_char {
-            //println!("CARACTERE DE FINALIZAÇÂO");
-            quoted = quoted + init_char.to_string().as_str();
-            string_end = true;
-        }
-
-        if !string_end {
-            quoted = quoted + character.as_str();
-        } else {
-            if character == ":".to_string()
-                || character == " ".to_string()
-                || character == init_char.to_string()
-            {
-                continue;
-            }
-
-            unquoted = unquoted + character.as_str();
-        }
-    }
-
-    let unquoted = unquoted.trim().to_string();
-
-    (quoted, unquoted)
-}
-
 fn check_condition(condicao_str: &str, pool: &mut Vec<Variable>) -> bool {
-    if condicao_str.starts_with("B!(") || condicao_str.starts_with("V!(") {
-        match eval_b(condicao_str, pool) {
-            Ok(v) => v,
-            Err(e) => {
-                println!("Erro ao avaliar condição: {}", e);
-                return false;
-            }
-        }
-    } else {
-        match condicao_str {
-            "true" => true,
-            "false" => false,
+    let response = catch_real_values(condicao_str, pool, 1);
+
+    let retorno = match response {
+        Ok(r) => match r {
+            Values::Bool(r) => r,
             _ => {
-                //println!("Condição inválida para IF: {}", condicao_str);
-                return false;
+                println!("Retorno inválido para tipo Bool");
+                false
             }
+        },
+        Err(r) => {
+            println!("Erro ao avaliar expressão: {}", r);
+            false
         }
-    }
-}
-unsafe fn read_variables(pool: &mut Vec<Variable>) {
-    println!("\n---- Variáveis alocadas ----");
-
-    for var in pool {
-        print!("{}: ", var.nome);
-
-        match var.tipo {
-            Types::Bool => {
-                if let Values::Bool(v) = var.valor {
-                    println!("Bool = {}", v);
-                }
-            }
-            Types::U8 => {
-                if let Values::U8(v) = var.valor {
-                    println!("U8 = {}", v);
-                }
-            }
-            Types::I8 => {
-                if let Values::I8(v) = var.valor {
-                    println!("I8 = {}", v);
-                }
-            }
-            Types::U32 => {
-                if let Values::U32(v) = var.valor {
-                    println!("U32 = {}", v);
-                }
-            }
-            Types::I32 => {
-                if let Values::I32(v) = var.valor {
-                    println!("I32 = {}", v);
-                }
-            }
-            Types::String => {
-                if let Values::String(ref v) = var.valor {
-                    println!("String = \"{}\"", v);
-                }
-            }
-        }
-    }
+    };
+    return retorno;
 }
 
 fn main() {
@@ -1179,16 +589,14 @@ fn main() {
                 continue;
             }
 
-            unsafe {
-                interpretar(
-                    instrucao,
-                    &mut pool,
-                    &mut escopos,
-                    &mut ignore_next,
-                    &mut valid_function,
-                    &mut foi_quebrado,
-                );
-            }
+            interpretar(
+                instrucao,
+                &mut pool,
+                &mut escopos,
+                &mut ignore_next,
+                &mut valid_function,
+                &mut foi_quebrado,
+            );
         }
 
         //read_variables(&mut pool);
@@ -1198,8 +606,5 @@ fn main() {
             var.destruidor();
         }
         pool.clear();
-    }
-    loop {
-        // Mantém o console aberto
     }
 }

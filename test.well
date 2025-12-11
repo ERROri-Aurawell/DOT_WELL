@@ -1,11 +1,7 @@
-VAR: String: testandoUppercase = "texto pequeno" : <TOUPPERCASE/> ;
+U8: variavelu8 = 255;
 
-VAR: String: testandoSemUppercase = "texto Sem Nada";
+CHANGE:variavelu8: variavelu8 + 1; //Isso causa um buffer overflow, vai voltar pra 0
 
-VAR: String: DEIXAMINUSCULO = "TEXTO GRANDE" : <TOLOWERCASE/>;
+variavelu8 = 1 + variavelu8;
 
-PRINT:V!(testandoUppercase);
-
-PRINT:V!(testandoSemUppercase);
-
-PRINT:V!(DEIXAMINUSCULO);
+PRINT:V!(variavelu8);
