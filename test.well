@@ -1,6 +1,7 @@
+FN:escopo(p1, p2){
 U8: variavelu8 = 255;
 
-variavelu8 = 126;
+variavelu8 = 125;
 
 variavelu8 *=2;
 
@@ -11,3 +12,14 @@ variavelu8 += 1;
 variavelu8++;
 
 PRINT:V!(variavelu8);
+PRINT:T!(escrever texto ai pra ver se funciona);
+PRINT:V!(teste);
+};
+
+U8: teste = 10;
+teste = 20;
+
+U16: semSinal16 = 16000;
+
+//EXECUTE:escopo;
+escopo(teste, semSinal16);

@@ -1,4 +1,4 @@
-# Projeto DOT_WELL (V2.1)
+# Projeto DOT_WELL (V2.2)
 
 DOT_WELL é uma linguagem de programação interpretada, inspirada em linguagens como Rust, C e JavaScript. Ela é projetada para ser explícita e fortemente tipada.
 
@@ -54,27 +54,42 @@ DROP:numero;
 ### Funções
 Funções são blocos de código que podem ser definidos e executados posteriormente.
 
-**Sintaxe:**
-`FN:nome_da_funcao{ ...código... }FN;`
+Parâmetros podem ser deixados vazios: `FN:saudacao(){ ... };` (equivalente a não declarar parâmetros).
 
-**Executando uma função:**
-`EXECUTE:nome_da_funcao;`
+**Chamadas de função:**
+- Chamada explícita: `EXECUTE:nome_da_funcao;` — executa a função pelo nome, sem passagem de argumentos.
+- Chamada direta com parênteses: `nome(arg1,arg2)` — o interpretador reconhece a invocação e valida a quantidade de parâmetros declarados; atualmente a passagem/ligação de valores aos parâmetros não cria escopo local completo (ver limitações).
 
 **Exemplo:**
 ```
-FN:saudacao{
+FN:saudacao(){
     PRINT:"Executando a função de saudação!";
-}FN;
+};
 
 EXECUTE:saudacao;
+
+// ou chamada direta (parâmetros são aceitos, mas ainda não vinculados a um escopo local):
+// FN:compara(x,y){ PRINT:T!("x=" V!(x) " y=" V!(y)); };
+// compara(10,20)
 ```
+
+**Arquitetura de funções (V2.2) — alto nível:**
+- Ao encontrar `FN:...(` o interpretador entra em modo de construção de função e lê até encontrar as chaves balanceadas. O corpo é acumulado como texto e salvo em um registro de funções.
+- Cada função é armazenada com `nome`, `código` (string concatenada) e `parameters` (lista de nomes).
+- A construção suporta chaves aninhadas; a construção só termina quando todas as chaves são fechadas.
+
+**Limitações atuais (V2.2):**
+- Os parâmetros declarados são parseados e a chamada valida apenas a quantidade; ainda não há ligação automática de valores a um escopo local com substituição dentro do corpo da função.
+- O corpo da função é executado no contexto atual (uso de variáveis globais/`pool`) — não existe isolamento completo de escopo local ainda.
+
+
 
 ### Controle de Fluxo
 
 #### IF
 Executa uma função se uma condição for verdadeira.
 
-**Sintaxe:**
+**Sintaxe (Chamando função sem parâmetros):**
 `IF:condicao:nome_da_funcao;`
 
 **Exemplo:**
@@ -83,9 +98,9 @@ U8:idade = 18;
 
 FN:maior_de_idade{
     PRINT:"É maior de idade.";
-}FN;
+};
 
-IF:B!(V!(idade) >= 18):maior_de_idade;
+IF:idade >= 18:maior_de_idade;
 ```
 
 #### WHILE
@@ -102,7 +117,7 @@ FN:incrementa{
     CHANGE:contador:M!(V!(contador) + 1);
     PRINT:T!("Contador: " V!(contador));
     IF:B!(V!(contador) == 5):BREAK;
-}FN;
+};
 
 WHILE:B!(V!(contador) < 10):incrementa;
 ```

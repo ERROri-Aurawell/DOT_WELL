@@ -33,9 +33,10 @@ pub struct Variable {
     pub nome: String,
 }
 
-pub struct Escopo {
+pub struct Funcao {
     pub nome: String,
     pub codigo: String,
+    pub parameters: Vec<String>,
 }
 
 impl Variable {

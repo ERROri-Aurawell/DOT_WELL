@@ -1,7 +1,6 @@
 use std::fs;
 
 mod v1;
-
 mod v2;
 
 use v1::evals::*;
@@ -10,81 +9,67 @@ use v1::prepare_text::processar_linha;
 use v1::var_maker::*;
 use v2::parse_new_var_command::var_manipulator as var_manipulator_2;
 
-use v2::change_var_value::{change_var_value};
-use v2::parse_values::catch_real_values;
+use v2::change_var_value::change_var_value;
+use v2::function_props::{function_props, montar_funcao};
 use v2::no_method::no_method;
+use v2::parse_values::catch_real_values;
 
-unsafe fn interpretar(
+struct Escopo {
+    superior: Option<Vec<Escopo>>,
+    atual: Vec<Variable>,
+}
+
+pub unsafe fn interpretar(
     linha: &str,
     pool: &mut Vec<Variable>,
-    escopos: &mut Vec<Escopo>,
-    ignore_next: &mut bool,
-    valid_function: &mut bool,
+    funcoes: &mut Vec<Funcao>,
     loop_function_checker: &mut bool,
+    function_pr: &mut function_props,
 ) {
-    //println!(" ----------\n Interpretando linha: {} \n", linha);
-
     let linha = linha.trim_end_matches(';').trim();
 
-    if linha.ends_with("}FN") {
-        *ignore_next = false;
+    if function_pr.em_construcao {
+        montar_funcao(linha, function_pr, funcoes);
         return;
     }
 
-    if *ignore_next {
-        let posicao = escopos.len() - 1;
-
-        if *valid_function == false {
-            return;
-        }
-
-        escopos[posicao].codigo.push_str(linha);
-        escopos[posicao].codigo.push(';');
-        return;
-    }
+    //println!("----------\nInterpretando linha: {} \n", linha);
 
     let (metodo, resto) = match linha.split_once(":") {
         Some(v) => v,
-        None => {
-            ("", linha)
-            //println!("Método inválido → {} ", linha);
-            //return;
-        }
+        None => ("", linha),
     };
-
-    //println!("{metodo}");
 
     match metodo {
         "FN" => {
-            *ignore_next = true;
-            let (nome, codigo) = match resto.split_once('{') {
+            //println!("ENTROU NO ESCOPO -----------");
+            function_pr.em_construcao = true;
+
+            let (function_name, resto) = match resto.split_once("(") {
                 Some(v) => v,
-                None => {
-                    println!("Erro: linha sem '{{' → {}", linha);
-                    return;
-                }
+                None => ("", resto),
             };
 
-            //println!("Código interno: {}", codigo);
-
-            let escopo = Escopo {
-                nome: nome.to_string(),
-                codigo: codigo.trim_end_matches('}').trim().to_string() + ";",
-            };
-
-            for function in escopos.iter() {
-                if function.nome == escopo.nome {
-                    println!("Função '{}' já existe.", escopo.nome);
-                    *valid_function = false;
+            for function in funcoes.iter() {
+                if function.nome == function_name {
+                    println!("Erro: Já existe uma função nomeada: '{}'", function_name);
                     return;
                 }
             }
 
-            *valid_function = true;
+            let (parameters, codigo) = match resto.split_once(")") {
+                Some(v) => v,
+                None => ("", resto),
+            };
 
-            escopos.push(escopo);
+            let escopo = Funcao {
+                nome: function_name.to_string(),
+                codigo: "".to_string(),
+                parameters: parameters.split(",").map(|s| s.to_string()).collect(),
+            };
+            funcoes.push(escopo);
 
-            return;
+            montar_funcao(codigo, function_pr, funcoes);
         }
         "String" | "U8" | "I8" | "U32" | "I32" | "Bool" => {
             var_manipulator_2(metodo, resto, linha, pool);
@@ -135,31 +120,42 @@ unsafe fn interpretar(
         "EXECUTE" => {
             println!("Chamando função: {}", resto);
 
-            let mut codigo_funcao = None;
-            for function in escopos.iter() {
+            let mut codigo_funcao: Option<String> = None;
+
+            //let mut parametros_funct: Option<Vec<String>> = None; //isso vai ser usado quando eu implementar escopo
+
+            for function in funcoes.iter() {
                 if function.nome == resto {
                     codigo_funcao = Some(function.codigo.clone());
+                    //parametros_funct = Some(function.parameters.clone());
                     break;
                 }
             }
 
             if let Some(codigo) = codigo_funcao {
                 //println!("Função encontrada! Código: {}", codigo);
-                let mut foi_quebrado = false;
+                let mut function_pr = function_props {
+                    em_construcao: false,
+                    ignorar_chaves: 0,
+                };
                 for instrucao in codigo.split(';') {
                     let instrucao = instrucao.trim();
                     if instrucao.is_empty() {
                         continue;
                     }
 
+                    //let mut escopo = Escopo{
+                    //superior: Some(escopo),
+                    // atual: Vec::new()
+                    //};
+
                     unsafe {
                         interpretar(
                             instrucao,
                             pool,
-                            escopos,
-                            ignore_next,
-                            valid_function,
-                            &mut foi_quebrado,
+                            funcoes,
+                            loop_function_checker,
+                            &mut function_pr,
                         );
                     }
                 }
@@ -183,7 +179,7 @@ unsafe fn interpretar(
                 //println!("Condição verdadeira, executando função: {}", funcao_str);
 
                 let mut codigo_funcao = None;
-                for function in escopos.iter() {
+                for function in funcoes.iter() {
                     if function.nome == funcao_str {
                         codigo_funcao = Some(function.codigo.clone());
                         break;
@@ -191,8 +187,11 @@ unsafe fn interpretar(
                 }
 
                 if let Some(codigo) = codigo_funcao {
-                    let mut foi_quebrado = false;
                     //println!("Função encontrada! Código: {}", codigo);
+                    let mut function_pr = function_props {
+                        em_construcao: false,
+                        ignorar_chaves: 0,
+                    };
                     for instrucao in codigo.split(';') {
                         let instrucao = instrucao.trim();
                         if instrucao.is_empty() {
@@ -202,10 +201,9 @@ unsafe fn interpretar(
                             interpretar(
                                 instrucao,
                                 pool,
-                                escopos,
-                                ignore_next,
-                                valid_function,
-                                &mut foi_quebrado,
+                                funcoes,
+                                loop_function_checker,
+                                &mut function_pr,
                             );
                         }
                     }
@@ -216,8 +214,6 @@ unsafe fn interpretar(
                         println!("Função '{}' não encontrada.", funcao_str);
                     }
                 }
-            } else {
-                //println!("Condição falsa, não executando função: {}", funcao_str_);
             }
         }
         "WHILE" => {
@@ -238,7 +234,7 @@ unsafe fn interpretar(
                 //println!("Condição verdadeira, executando função: {}", funcao_str);
 
                 let mut codigo_funcao = None;
-                for function in escopos.iter() {
+                for function in funcoes.iter() {
                     if function.nome == funcao_str {
                         codigo_funcao = Some(function.codigo.clone());
                         break;
@@ -247,6 +243,10 @@ unsafe fn interpretar(
 
                 if let Some(codigo) = codigo_funcao {
                     //println!("Função encontrada! Código: {}", codigo);
+                    let mut function_pr = function_props {
+                        em_construcao: false,
+                        ignorar_chaves: 0,
+                    };
                     for instrucao in codigo.split(';') {
                         let instrucao = instrucao.trim();
                         if instrucao.is_empty() {
@@ -262,10 +262,9 @@ unsafe fn interpretar(
                             interpretar(
                                 instrucao,
                                 pool,
-                                escopos,
-                                ignore_next,
-                                valid_function,
-                                &mut foi_quebrado,
+                                funcoes,
+                                loop_function_checker,
+                                &mut function_pr,
                             );
                         }
                     }
@@ -292,7 +291,74 @@ unsafe fn interpretar(
             }
         }
         "" => {
-            no_method(resto, pool);
+            let (nome, inner) = match resto.split_once("(") {
+                Some(s) => s,
+                None => {
+                    println!("");
+                    ("", "")
+                }
+            };
+            if nome == "" {
+                no_method(resto, pool);
+                return;
+            }
+
+            let parametros: Vec<String> = inner
+                .split(',')
+                .map(|s| s.chars().filter(|&c| c.is_alphanumeric()).collect())
+                .collect();
+
+            let mut codigo_funcao: Option<String> = None;
+            let mut parametros_funct: Option<Vec<String>> = None; //isso vai ser usado quando eu implementar escopo
+
+            for function in funcoes.iter() {
+                if function.nome == nome {
+                    codigo_funcao = Some(function.codigo.clone());
+                    parametros_funct = Some(function.parameters.clone());
+                    break;
+                }
+            }
+            if let Some(_parameters) = parametros_funct {
+                if parametros.len() != _parameters.len() {
+                    println!(
+                        "Erro: Função '{}' esperava {} parametros",
+                        nome,
+                        _parameters.len()
+                    );
+                    return;
+                }
+                for (indice, par) in _parameters.iter().enumerate() {
+                    println!(
+                        "Parâmetro: {} - índice {} - recebe {}",
+                        par, indice, parametros[indice]
+                    );
+                }
+            }
+
+            if let Some(codigo) = codigo_funcao {
+                //println!("Função encontrada! Código: {}", codigo);
+                let mut function_pr = function_props {
+                    em_construcao: false,
+                    ignorar_chaves: 0,
+                };
+                for instrucao in codigo.split(';') {
+                    let instrucao = instrucao.trim();
+                    if instrucao.is_empty() {
+                        continue;
+                    }
+
+                    unsafe {
+                        interpretar(
+                            instrucao,
+                            pool,
+                            funcoes,
+                            loop_function_checker,
+                            &mut function_pr,
+                        );
+                    }
+                }
+                return;
+            };
         }
         _ => {}
     };
@@ -319,7 +385,6 @@ fn check_condition(condicao_str: &str, pool: &mut Vec<Variable>) -> bool {
 
 fn main() {
     let conteudo = fs::read_to_string("test.well").expect("Não foi possível ler o arquivo");
-
     let resultado: String = conteudo
         .lines()
         .filter(|linha| !linha.trim().is_empty())
@@ -327,40 +392,44 @@ fn main() {
         .collect();
 
     unsafe {
+        let mut escopo = Escopo {
+            superior: None,
+            atual: Vec::new(),
+        };
+
         let mut pool: Vec<Variable> = Vec::new();
 
-        let mut escopos: Vec<Escopo> = Vec::new();
+        let mut funcoes: Vec<Funcao> = Vec::new();
+        let mut loop_function_checker = false;
 
-        let mut ignore_next = false;
-
-        let mut valid_function = true;
-
-        let mut foi_quebrado = false;
+        let mut function_pr = function_props {
+            em_construcao: false,
+            ignorar_chaves: 0,
+        };
 
         println!(" \n\nCONSOLE OUTPUT: \n");
 
         for instrucao in resultado.split(';') {
-            let instrucao = instrucao.trim();
-            if instrucao.is_empty() {
+            let linha = instrucao.trim();
+            if linha.is_empty() {
                 continue;
             }
 
             interpretar(
-                instrucao,
+                linha,
                 &mut pool,
-                &mut escopos,
-                &mut ignore_next,
-                &mut valid_function,
-                &mut foi_quebrado,
+                &mut funcoes,
+                &mut loop_function_checker,
+                &mut function_pr,
             );
         }
 
         //read_variables(&mut pool);
 
         // Não esquecer
-        for var in &pool {
+        for var in &escopo.atual {
             var.destruidor();
         }
-        pool.clear();
+        escopo.atual.clear();
     }
 }
