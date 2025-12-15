@@ -1,5 +1,8 @@
 use std::fs;
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 mod v1;
 mod v2;
 
@@ -15,8 +18,32 @@ use v2::no_method::no_method;
 use v2::parse_values::catch_real_values;
 
 struct Escopo {
-    superior: Option<Vec<Escopo>>,
+    superior: Option<Rc<RefCell<Escopo>>>,
     atual: Vec<Variable>,
+}
+
+impl Escopo {
+    pub fn buscar(&self, nome: &str) -> Option<Variable> {
+        self.atual
+            .iter()
+            .find(|v| v.nome == nome)
+            .map(|v| Variable {
+                nome: v.nome.clone(),
+                valor: v.valor.clone(),
+                tipo: v.tipo.clone(),
+                ponteiro: v.ponteiro.clone(),
+            })
+            .or_else(|| self.superior.as_ref()?.borrow().buscar(nome))
+    }
+}
+
+impl Escopo {
+    fn novo_filho(pai: Rc<RefCell<Escopo>>) -> Rc<RefCell<Escopo>> {
+        Rc::new(RefCell::new(Escopo {
+            superior: Some(pai),
+            atual: Vec::new(),
+        }))
+    }
 }
 
 pub unsafe fn interpretar(
@@ -25,6 +52,7 @@ pub unsafe fn interpretar(
     funcoes: &mut Vec<Funcao>,
     loop_function_checker: &mut bool,
     function_pr: &mut function_props,
+    escopo_global: &mut Rc<RefCell<Escopo>>,
 ) {
     let linha = linha.trim_end_matches(';').trim();
 
@@ -144,10 +172,7 @@ pub unsafe fn interpretar(
                         continue;
                     }
 
-                    //let mut escopo = Escopo{
-                    //superior: Some(escopo),
-                    // atual: Vec::new()
-                    //};
+                    let mut escopo_interno = Escopo::novo_filho(escopo_global.clone());
 
                     unsafe {
                         interpretar(
@@ -156,6 +181,7 @@ pub unsafe fn interpretar(
                             funcoes,
                             loop_function_checker,
                             &mut function_pr,
+                            &mut escopo_interno,
                         );
                     }
                 }
@@ -192,6 +218,8 @@ pub unsafe fn interpretar(
                         em_construcao: false,
                         ignorar_chaves: 0,
                     };
+                    let mut escopo_interno = Escopo::novo_filho(escopo_global.clone());
+
                     for instrucao in codigo.split(';') {
                         let instrucao = instrucao.trim();
                         if instrucao.is_empty() {
@@ -204,6 +232,7 @@ pub unsafe fn interpretar(
                                 funcoes,
                                 loop_function_checker,
                                 &mut function_pr,
+                                &mut escopo_interno,
                             );
                         }
                     }
@@ -247,6 +276,7 @@ pub unsafe fn interpretar(
                         em_construcao: false,
                         ignorar_chaves: 0,
                     };
+                    let mut escopo_interno = Escopo::novo_filho(escopo_global.clone());
                     for instrucao in codigo.split(';') {
                         let instrucao = instrucao.trim();
                         if instrucao.is_empty() {
@@ -265,6 +295,7 @@ pub unsafe fn interpretar(
                                 funcoes,
                                 loop_function_checker,
                                 &mut function_pr,
+                                &mut escopo_interno,
                             );
                         }
                     }
@@ -341,6 +372,7 @@ pub unsafe fn interpretar(
                     em_construcao: false,
                     ignorar_chaves: 0,
                 };
+                let mut escopo_interno = Escopo::novo_filho(escopo_global.clone());
                 for instrucao in codigo.split(';') {
                     let instrucao = instrucao.trim();
                     if instrucao.is_empty() {
@@ -354,6 +386,7 @@ pub unsafe fn interpretar(
                             funcoes,
                             loop_function_checker,
                             &mut function_pr,
+                            &mut escopo_interno,
                         );
                     }
                 }
@@ -392,11 +425,6 @@ fn main() {
         .collect();
 
     unsafe {
-        let mut escopo = Escopo {
-            superior: None,
-            atual: Vec::new(),
-        };
-
         let mut pool: Vec<Variable> = Vec::new();
 
         let mut funcoes: Vec<Funcao> = Vec::new();
@@ -408,6 +436,11 @@ fn main() {
         };
 
         println!(" \n\nCONSOLE OUTPUT: \n");
+
+        let mut escopo = Rc::new(RefCell::new(Escopo {
+            superior: None,
+            atual: Vec::new(),
+        }));
 
         for instrucao in resultado.split(';') {
             let linha = instrucao.trim();
@@ -421,6 +454,7 @@ fn main() {
                 &mut funcoes,
                 &mut loop_function_checker,
                 &mut function_pr,
+                &mut escopo,
             );
         }
 
@@ -431,5 +465,12 @@ fn main() {
             var.destruidor();
         }
         pool.clear();
+
+        /*
+        for var in &escopo.atual {
+            var.destruidor();
+        }
+        escopo.atual.clear();
+        */
     }
 }

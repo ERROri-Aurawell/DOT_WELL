@@ -1,5 +1,6 @@
 use std::ptr;
 
+#[derive(Clone)]
 pub enum Types {
     Bool,
     U8,
@@ -8,7 +9,7 @@ pub enum Types {
     I32,
     String,
 }
-
+#[derive(Clone)]
 pub enum Values {
     Bool(bool),
     U8(u8),
@@ -17,7 +18,7 @@ pub enum Values {
     I32(i32),
     String(String),
 }
-
+#[derive(Clone)]
 pub enum Pointers {
     Bool(*mut bool),
     U8(*mut u8),
@@ -26,6 +27,7 @@ pub enum Pointers {
     I32(*mut i32),
     String(*mut String),
 }
+#[derive(Clone)]
 pub struct Variable {
     pub valor: Values,
     pub tipo: Types,
