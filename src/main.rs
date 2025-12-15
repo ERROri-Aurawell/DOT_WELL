@@ -427,9 +427,9 @@ fn main() {
         //read_variables(&mut pool);
 
         // Não esquecer
-        for var in &escopo.atual {
+        for var in &pool {
             var.destruidor();
         }
-        escopo.atual.clear();
+        pool.clear();
     }
 }
