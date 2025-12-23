@@ -27,6 +27,19 @@ pub enum Pointers {
     I32(*mut i32),
     String(*mut String),
 }
+
+impl Pointers {
+    pub fn from_value(valor: &Values) -> Self {
+        match valor {
+            Values::Bool(v) => Pointers::Bool(Box::into_raw(Box::new(*v))),
+            Values::U8(v) => Pointers::U8(Box::into_raw(Box::new(*v))),
+            Values::I8(v) => Pointers::I8(Box::into_raw(Box::new(*v))),
+            Values::U32(v) => Pointers::U32(Box::into_raw(Box::new(*v))),
+            Values::I32(v) => Pointers::I32(Box::into_raw(Box::new(*v))),
+            Values::String(v) => Pointers::String(Box::into_raw(Box::new(v.clone()))),
+        }
+    }
+}
 #[derive(Clone)]
 pub struct Variable {
     pub valor: Values,

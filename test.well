@@ -11,9 +11,9 @@ variavelu8 += 1;
 
 variavelu8++;
 
-PRINT:V!(variavelu8);
-PRINT:T!(escrever texto ai pra ver se funciona);
-PRINT:V!(teste);
+PRINT:variavelu8;
+//PRINT:escrever texto ai pra ver se funciona;
+PRINT:teste;
 };
 
 U8: teste = 10;

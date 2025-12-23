@@ -6,25 +6,24 @@ use std::rc::Rc;
 mod v1;
 mod v2;
 
-use v1::evals::*;
-use v1::parse_var_command::var_manipulator;
+//use v1::evals::*;
+//use v1::parse_var_command::var_manipulator;
 use v1::prepare_text::processar_linha;
 use v1::var_maker::*;
 use v2::parse_new_var_command::var_manipulator as var_manipulator_2;
 
-use v2::change_var_value::change_var_value;
 use v2::function_props::{function_props, montar_funcao};
 use v2::no_method::no_method;
 use v2::parse_values::catch_real_values;
 
-struct Escopo {
+pub struct Escopo {
     superior: Option<Rc<RefCell<Escopo>>>,
-    atual: Vec<Variable>,
+    dados: Vec<Variable>,
 }
 
 impl Escopo {
     pub fn buscar(&self, nome: &str) -> Option<Variable> {
-        self.atual
+        self.dados
             .iter()
             .find(|v| v.nome == nome)
             .map(|v| Variable {
@@ -41,18 +40,55 @@ impl Escopo {
     fn novo_filho(pai: Rc<RefCell<Escopo>>) -> Rc<RefCell<Escopo>> {
         Rc::new(RefCell::new(Escopo {
             superior: Some(pai),
-            atual: Vec::new(),
+            dados: Vec::new(),
         }))
     }
 }
 
-pub unsafe fn interpretar(
+impl Escopo {
+    pub fn create_var(&mut self, tipo: Types, valor: Values, nome: &str) {
+        let var = Variable {
+            tipo,
+            ponteiro: Pointers::from_value(&valor),
+            valor,
+            nome: nome.to_string(),
+        };
+
+        self.dados.push(var);
+    }
+}
+
+impl Escopo {
+    pub fn remover_var(&mut self, nome: &str) -> bool {
+        if let Some(pos) = self.dados.iter().position(|v| v.nome == nome) {
+            self.dados.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl Escopo {
+    pub fn atribuir(&mut self, nome: &str, valor: Values) -> bool {
+        if let Some(v) = self.dados.iter_mut().find(|v| v.nome == nome) {
+            v.valor = valor;
+            true
+        } else if let Some(pai) = &self.superior {
+            pai.borrow_mut().atribuir(nome, valor)
+        } else {
+            false
+        }
+    }
+}
+
+unsafe fn interpretar(
     linha: &str,
     pool: &mut Vec<Variable>,
     funcoes: &mut Vec<Funcao>,
     loop_function_checker: &mut bool,
     function_pr: &mut function_props,
-    escopo_global: &mut Rc<RefCell<Escopo>>,
+    escopo_atual: &mut Rc<RefCell<Escopo>>,
 ) {
     let linha = linha.trim_end_matches(';').trim();
 
@@ -100,15 +136,17 @@ pub unsafe fn interpretar(
             montar_funcao(codigo, function_pr, funcoes);
         }
         "String" | "U8" | "I8" | "U32" | "I32" | "Bool" => {
-            var_manipulator_2(metodo, resto, linha, pool);
+            var_manipulator_2(metodo, resto, linha, escopo_atual);
         }
 
         // Vou apagar isso depois, ou não também, sou indeciso
         "VAR" => {
-            var_manipulator(resto, linha, pool);
+            //var_manipulator(resto, linha, pool);
         }
 
         "DROP" => {
+            escopo_atual.borrow_mut().remover_var(resto);
+            /*
             for var in pool.iter() {
                 if var.nome == resto {
                     remover_var(pool, var as *const Variable);
@@ -116,6 +154,7 @@ pub unsafe fn interpretar(
                     return;
                 }
             }
+            */
         }
 
         "CHANGE" => {
@@ -127,22 +166,27 @@ pub unsafe fn interpretar(
                 }
             };
 
-            //println!("transformar {} em {}", variavel, novo_valor);
-
-            let mut position = 0;
-            for var in pool.iter() {
-                if var.nome == variavel {
-                    break;
+            // 1️⃣ buscar variável existente (para pegar o tipo)
+            let var_existente = match escopo_atual.borrow().buscar(variavel) {
+                Some(v) => v,
+                None => {
+                    println!("Variável '{}' não encontrada para alteração.", variavel);
+                    return;
                 }
-                position += 1;
-            }
+            };
 
-            if position == pool.len() {
-                println!("Variável '{}' não encontrada para alteração.", variavel);
-                return;
-            }
+            // 2️⃣ avaliar expressão com base no tipo da variável
+            let valor = match catch_real_values(novo_valor, escopo_atual, var_existente.tipo as u8)
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    println!("Erro ao avaliar '{}': {}", novo_valor, e);
+                    return;
+                }
+            };
 
-            change_var_value(pool, position, novo_valor);
+            // 3️⃣ atribuir
+            escopo_atual.borrow_mut().atribuir(variavel, valor);
         }
 
         "EXECUTE" => {
@@ -172,7 +216,7 @@ pub unsafe fn interpretar(
                         continue;
                     }
 
-                    let mut escopo_interno = Escopo::novo_filho(escopo_global.clone());
+                    let mut escopo_interno = Escopo::novo_filho(escopo_atual.clone());
 
                     unsafe {
                         interpretar(
@@ -198,7 +242,7 @@ pub unsafe fn interpretar(
                 }
             };
 
-            let condicao_resultado = check_condition(condicao_str, pool);
+            let condicao_resultado = check_condition(condicao_str, escopo_atual);
 
             if condicao_resultado {
                 let funcao_str = funcao_str_.trim();
@@ -218,7 +262,7 @@ pub unsafe fn interpretar(
                         em_construcao: false,
                         ignorar_chaves: 0,
                     };
-                    let mut escopo_interno = Escopo::novo_filho(escopo_global.clone());
+                    let mut escopo_interno = Escopo::novo_filho(escopo_atual.clone());
 
                     for instrucao in codigo.split(';') {
                         let instrucao = instrucao.trim();
@@ -254,7 +298,7 @@ pub unsafe fn interpretar(
                 }
             };
 
-            let mut condicao_resultado = check_condition(condicao_str, pool);
+            let mut condicao_resultado = check_condition(condicao_str, escopo_atual);
 
             let mut foi_quebrado = false;
 
@@ -276,7 +320,7 @@ pub unsafe fn interpretar(
                         em_construcao: false,
                         ignorar_chaves: 0,
                     };
-                    let mut escopo_interno = Escopo::novo_filho(escopo_global.clone());
+                    let mut escopo_interno = Escopo::novo_filho(escopo_atual.clone());
                     for instrucao in codigo.split(';') {
                         let instrucao = instrucao.trim();
                         if instrucao.is_empty() {
@@ -306,13 +350,50 @@ pub unsafe fn interpretar(
                 if foi_quebrado {
                     condicao_resultado = false;
                 } else {
-                    condicao_resultado = check_condition(condicao_str, pool);
+                    condicao_resultado = check_condition(condicao_str, escopo_atual);
                 };
             }
         }
         "PRINT" => {
+            //DEPOIS EU ARRUMO O PRINT
+
+            //println!("{}", resto);
+
+            // 1️⃣ buscar variável existente (para pegar o tipo)
+            let var_existente = match escopo_atual.borrow().buscar(resto) {
+                Some(v) => v,
+                None => {
+                    println!("Variável '{}' não encontrada para alteração.", resto);
+                    return;
+                }
+            };
+
+            let novo_valor = format!("{resto} - 0");
+
+            let novo_valor = &novo_valor;
+
+            // 2️⃣ avaliar expressão com base no tipo da variável
+            let valor = match catch_real_values(novo_valor, escopo_atual, var_existente.tipo as u8)
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    println!("Erro ao avaliar '{}': {}", novo_valor, e);
+                    return;
+                }
+            };
+
+            match valor {
+                Values::U8(v) => {
+                    println!("{v}")
+                }
+                _ => {
+                    println!("Deu erro?")
+                }
+            }
+
+            /*
             let conteudo = resto.trim();
-            match transform_to_string(conteudo, pool) {
+            match transform_to_string(conteudo, escopo_atual) {
                 Ok(v) => {
                     println!("{}", v);
                 }
@@ -320,6 +401,7 @@ pub unsafe fn interpretar(
                     println!("Erro ao transformar para String: {}", e);
                 }
             }
+            */
         }
         "" => {
             let (nome, inner) = match resto.split_once("(") {
@@ -330,7 +412,7 @@ pub unsafe fn interpretar(
                 }
             };
             if nome == "" {
-                no_method(resto, pool);
+                no_method(resto, escopo_atual);
                 return;
             }
 
@@ -372,7 +454,7 @@ pub unsafe fn interpretar(
                     em_construcao: false,
                     ignorar_chaves: 0,
                 };
-                let mut escopo_interno = Escopo::novo_filho(escopo_global.clone());
+                let mut escopo_interno = Escopo::novo_filho(escopo_atual.clone());
                 for instrucao in codigo.split(';') {
                     let instrucao = instrucao.trim();
                     if instrucao.is_empty() {
@@ -397,19 +479,19 @@ pub unsafe fn interpretar(
     };
 }
 
-fn check_condition(condicao_str: &str, pool: &mut Vec<Variable>) -> bool {
-    let response = catch_real_values(condicao_str, pool, 1);
+fn check_condition(condicao_str: &str, escopo_atual: &mut Rc<RefCell<Escopo>>) -> bool {
+    let response = match catch_real_values(condicao_str, escopo_atual, 1) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("Erro ao avaliar: {e}");
+            return false;
+        }
+    };
 
     let retorno = match response {
-        Ok(r) => match r {
-            Values::Bool(r) => r,
-            _ => {
-                println!("Retorno inválido para tipo Bool");
-                false
-            }
-        },
-        Err(r) => {
-            println!("Erro ao avaliar expressão: {}", r);
+        Values::Bool(r) => r,
+        _ => {
+            println!("Retorno inválido para tipo Bool");
             false
         }
     };
@@ -439,7 +521,7 @@ fn main() {
 
         let mut escopo = Rc::new(RefCell::new(Escopo {
             superior: None,
-            atual: Vec::new(),
+            dados: Vec::new(),
         }));
 
         for instrucao in resultado.split(';') {

@@ -1,8 +1,32 @@
+use crate::Escopo;
 use crate::v1::var_maker::*;
 use evalexpr::*;
 use regex::Regex;
+use std::cell::RefCell;
+use std::rc::Rc;
 
-pub fn catch_real_values(s: &str, pool: &Vec<Variable>, var_type: u8) -> Result<Values, String> {
+fn value_to_string(valor: &Values) -> String {
+    match valor {
+        Values::Bool(v) => {
+            if *v {
+                "1".into()
+            } else {
+                "0".into()
+            }
+        }
+        Values::U8(v) => v.to_string(),
+        Values::I8(v) => v.to_string(),
+        Values::U32(v) => v.to_string(),
+        Values::I32(v) => v.to_string(),
+        Values::String(v) => v.clone(),
+    }
+}
+
+pub fn catch_real_values(
+    s: &str,
+    escopo: &mut Rc<RefCell<Escopo>>,
+    var_type: u8,
+) -> Result<Values, String> {
     let characters: Vec<char> = s.chars().collect();
 
     let mut test: String = "".to_string();
@@ -34,7 +58,11 @@ pub fn catch_real_values(s: &str, pool: &Vec<Variable>, var_type: u8) -> Result<
                     continue;
                 }
 
-                let talvez_variavel = find_var_value(&v, pool).ok();
+                let talvez_variavel = escopo
+                    .borrow()
+                    .buscar(v)
+                    .map(|var| value_to_string(&var.valor));
+
                 let response = match talvez_variavel {
                     Some(var) => var,
                     None => v.to_string(),
@@ -55,90 +83,86 @@ pub fn catch_real_values(s: &str, pool: &Vec<Variable>, var_type: u8) -> Result<
             let mut texto_parseado: String = test.clone();
 
             for v in valores {
-                let talvez_variavel = find_var_value(&v, pool).ok();
+                let response = escopo
+                    .borrow()
+                    .buscar(v)
+                    .map(|var| value_to_string(&var.valor))
+                    .unwrap_or_else(|| v.to_string());
 
-                let response = match talvez_variavel {
-                    Some(var) => var,
-                    None => v.to_string(),
-                };
-
-                texto_parseado = texto_parseado.replace(v, response.as_str());
+                texto_parseado = texto_parseado.replace(v, &response);
             }
 
             let value = eval(&texto_parseado).map_err(|e| e.to_string())?;
 
-            return match value {
+            match value {
                 Value::Float(f) => Ok(Values::U8(f as u8)),
                 Value::Int(i) => Ok(Values::U8(i as u8)),
                 _ => Err("A expressão não resultou em uma operação matemática.".to_string()),
-            };
+            }
         }
         3 => {
             let mut texto_parseado: String = test.clone();
 
             for v in valores {
-                let talvez_variavel = find_var_value(&v, pool).ok();
+                let response = escopo
+                    .borrow()
+                    .buscar(v)
+                    .map(|var| value_to_string(&var.valor))
+                    .unwrap_or_else(|| v.to_string());
 
-                let response = match talvez_variavel {
-                    Some(var) => var,
-                    None => v.to_string(),
-                };
-
-                texto_parseado = texto_parseado.replace(v, response.as_str());
+                texto_parseado = texto_parseado.replace(v, &response);
             }
 
             let value = eval(&texto_parseado).map_err(|e| e.to_string())?;
 
-            return match value {
+            match value {
                 Value::Float(f) => Ok(Values::I8(f as i8)),
                 Value::Int(i) => Ok(Values::I8(i as i8)),
                 _ => Err("A expressão não resultou em uma operação matemática.".to_string()),
-            };
+            }
         }
         4 => {
             let mut texto_parseado: String = test.clone();
 
             for v in valores {
-                let talvez_variavel = find_var_value(&v, pool).ok();
+                let response = escopo
+                    .borrow()
+                    .buscar(v)
+                    .map(|var| value_to_string(&var.valor))
+                    .unwrap_or_else(|| v.to_string());
 
-                let response = match talvez_variavel {
-                    Some(var) => var,
-                    None => v.to_string(),
-                };
-
-                texto_parseado = texto_parseado.replace(v, response.as_str());
+                texto_parseado = texto_parseado.replace(v, &response);
             }
 
             let value = eval(&texto_parseado).map_err(|e| e.to_string())?;
 
-            return match value {
+            match value {
                 Value::Float(f) => Ok(Values::U32(f as u32)),
                 Value::Int(i) => Ok(Values::U32(i as u32)),
                 _ => Err("A expressão não resultou em uma operação matemática.".to_string()),
-            };
+            }
         }
 
         5 => {
             let mut texto_parseado: String = test.clone();
 
             for v in valores {
-                let talvez_variavel = find_var_value(&v, pool).ok();
+                let response = escopo
+                    .borrow()
+                    .buscar(v)
+                    .map(|var| value_to_string(&var.valor))
+                    .unwrap_or_else(|| v.to_string());
 
-                let response = match talvez_variavel {
-                    Some(var) => var,
-                    None => v.to_string(),
-                };
-
-                texto_parseado = texto_parseado.replace(v, response.as_str());
+                texto_parseado = texto_parseado.replace(v, &response);
             }
 
             let value = eval(&texto_parseado).map_err(|e| e.to_string())?;
 
-            return match value {
+            match value {
                 Value::Float(f) => Ok(Values::I32(f as i32)),
                 Value::Int(i) => Ok(Values::I32(i as i32)),
                 _ => Err("A expressão não resultou em uma operação matemática.".to_string()),
-            };
+            }
         }
         _ => Err("".to_string()),
     };

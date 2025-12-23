@@ -7,5 +7,3 @@ pub mod parse_new_var_command;
 pub mod no_method;
 
 pub mod function_props;
-
-pub mod get_var_value;

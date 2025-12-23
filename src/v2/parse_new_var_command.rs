@@ -1,9 +1,12 @@
-use crate::v1::evals::transform_to_string;
+use crate::Escopo;
+//use crate::v1::evals::transform_to_string;
 use crate::v1::string_manipulator::{separate_quoted_and_unquoted, separate_string_functions};
 use crate::v1::var_maker::*;
 use crate::v2::parse_values::catch_real_values;
+use std::cell::RefCell;
+use std::rc::Rc;
 
-pub fn var_manipulator(metodo: &str, resto: &str, linha: &str, pool: &mut Vec<Variable>) {
+pub fn var_manipulator(metodo: &str, resto: &str, linha: &str, escopo: &mut Rc<RefCell<Escopo>>) {
     let (nome_str, valor_str) = match resto.split_once('=') {
         Some(v) => v,
         None => {
@@ -31,17 +34,10 @@ pub fn var_manipulator(metodo: &str, resto: &str, linha: &str, pool: &mut Vec<Va
         return;
     }
 
-    if find_var_value(nome_str, pool).is_ok() {
-        println!("Variável '{}' já existe.", nome_str);
-        return;
-    }
-
-    for variavel in pool.iter() {
-        if variavel.nome == nome_str {
-            println!("Variável '{}' já existe.", nome_str);
-            return;
-        }
-    }
+    match escopo.borrow().buscar(nome_str) {
+        Some(v) => return,
+        None => {}
+    };
 
     let tipo = match tipo_str {
         "Bool" => Types::Bool,
@@ -58,7 +54,7 @@ pub fn var_manipulator(metodo: &str, resto: &str, linha: &str, pool: &mut Vec<Va
 
     let valor = match tipo {
         Types::Bool => {
-            let response = catch_real_values(valor_str, pool, 1);
+            let response = catch_real_values(valor_str, escopo, 1);
 
             match response {
                 Ok(r) => match r {
@@ -76,7 +72,7 @@ pub fn var_manipulator(metodo: &str, resto: &str, linha: &str, pool: &mut Vec<Va
         }
 
         Types::U8 => {
-            let response = catch_real_values(valor_str, pool, 2);
+            let response = catch_real_values(valor_str, escopo, 2);
 
             match response {
                 Ok(r) => match r {
@@ -94,7 +90,7 @@ pub fn var_manipulator(metodo: &str, resto: &str, linha: &str, pool: &mut Vec<Va
         }
 
         Types::I8 => {
-            let response = catch_real_values(valor_str, pool, 3);
+            let response = catch_real_values(valor_str, escopo, 3);
 
             match response {
                 Ok(r) => match r {
@@ -112,7 +108,7 @@ pub fn var_manipulator(metodo: &str, resto: &str, linha: &str, pool: &mut Vec<Va
         }
 
         Types::U32 => {
-            let response = catch_real_values(valor_str, pool, 4);
+            let response = catch_real_values(valor_str, escopo, 4);
 
             match response {
                 Ok(r) => match r {
@@ -130,7 +126,7 @@ pub fn var_manipulator(metodo: &str, resto: &str, linha: &str, pool: &mut Vec<Va
         }
 
         Types::I32 => {
-            let response = catch_real_values(valor_str, pool, 5);
+            let response = catch_real_values(valor_str, escopo, 5);
 
             match response {
                 Ok(r) => match r {
@@ -163,14 +159,16 @@ pub fn var_manipulator(metodo: &str, resto: &str, linha: &str, pool: &mut Vec<Va
                 }
 
                 //Values::String(console_input)
+                /*
             } else if valor_str.starts_with("T!(") {
-                match transform_to_string(valor_str, pool) {
+                match transform_to_string(valor_str, escopo) {
                     Ok(v) => Values::String(v),
                     Err(e) => {
                         println!("Erro ao transformar para String: {}", e);
                         return;
                     }
                 }
+                */
             } else {
                 let (quoted, unquoted) = separate_quoted_and_unquoted(valor_str);
 
@@ -215,7 +213,9 @@ pub fn var_manipulator(metodo: &str, resto: &str, linha: &str, pool: &mut Vec<Va
             }
         }
     };
+
+    escopo.borrow_mut().create_var(tipo, valor, nome_str);
     unsafe {
-        create_var(tipo, valor, nome_str, pool);
+        //create_var(tipo, valor, nome_str, pool);
     }
 }

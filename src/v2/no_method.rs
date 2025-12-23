@@ -1,7 +1,10 @@
+use crate::Escopo;
 use crate::v1::var_maker::*;
 use crate::v2::change_var_value::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
-pub fn no_method(resto: &str, pool: &mut Vec<Variable>) {
+pub fn no_method(resto: &str, variaveis: &mut Rc<RefCell<Escopo>>) {
     //println!("Nenhum método informado, chutando o que deveria acontecer: ");
 
     let characters: Vec<char> = resto.chars().collect();
@@ -54,20 +57,9 @@ pub fn no_method(resto: &str, pool: &mut Vec<Variable>) {
 
                     //println!("transformar {} em {}", variavel, novo_valor);
 
-                    let mut position = 0;
-                    for var in pool.iter() {
-                        if var.nome == variavel {
-                            break;
-                        }
-                        position += 1;
-                    }
+                    //"variavel" é o nome da tal
 
-                    if position == pool.len() {
-                        println!("Variável '{}' não encontrada para alteração.", variavel);
-                        return;
-                    }
-
-                    change_var_value(pool, position, novo_valor);
+                    change_var_value(variaveis, variavel, novo_valor);
                 }
                 "+=" => {
                     let (variavel, novo_valor) = match resto.split_once("+=") {
@@ -77,25 +69,10 @@ pub fn no_method(resto: &str, pool: &mut Vec<Variable>) {
                         }
                     };
 
-                    //println!("transformar {} em {}", variavel, novo_valor);
-
-                    let mut position = 0;
-                    for var in pool.iter() {
-                        if var.nome == variavel {
-                            break;
-                        }
-                        position += 1;
-                    }
-
-                    if position == pool.len() {
-                        println!("Variável '{}' não encontrada para alteração.", variavel);
-                        return;
-                    }
-
-                    let novo_valor = format!("{}+{}", pool[position].nome, novo_valor);
+                    let novo_valor = format!("{}+{}", variavel, novo_valor);
                     let novo_valor = &novo_valor;
 
-                    change_var_value(pool, position, novo_valor);
+                    change_var_value(variaveis, variavel, novo_valor);
                 }
                 "-=" => {
                     let (variavel, novo_valor) = match resto.split_once("-=") {
@@ -105,23 +82,10 @@ pub fn no_method(resto: &str, pool: &mut Vec<Variable>) {
                         }
                     };
 
-                    let mut position = 0;
-                    for var in pool.iter() {
-                        if var.nome == variavel {
-                            break;
-                        }
-                        position += 1;
-                    }
-
-                    if position == pool.len() {
-                        println!("Variável '{}' não encontrada para alteração.", variavel);
-                        return;
-                    }
-
-                    let novo_valor = format!("{}-{}", pool[position].nome, novo_valor);
+                    let novo_valor = format!("{}-{}", variavel, novo_valor);
                     let novo_valor = &novo_valor;
 
-                    change_var_value(pool, position, novo_valor);
+                    change_var_value(variaveis, variavel, novo_valor);
                 }
                 "*=" => {
                     let (variavel, novo_valor) = match resto.split_once("*=") {
@@ -131,23 +95,10 @@ pub fn no_method(resto: &str, pool: &mut Vec<Variable>) {
                         }
                     };
 
-                    let mut position = 0;
-                    for var in pool.iter() {
-                        if var.nome == variavel {
-                            break;
-                        }
-                        position += 1;
-                    }
-
-                    if position == pool.len() {
-                        println!("Variável '{}' não encontrada para alteração.", variavel);
-                        return;
-                    }
-
-                    let novo_valor = format!("{} * {}", pool[position].nome, novo_valor);
+                    let novo_valor = format!("{} * {}", variavel, novo_valor);
                     let novo_valor = &novo_valor;
 
-                    change_var_value(pool, position, novo_valor);
+                    change_var_value(variaveis, variavel, novo_valor);
                 }
                 "/=" => {
                     let (variavel, novo_valor) = match resto.split_once("/=") {
@@ -157,23 +108,10 @@ pub fn no_method(resto: &str, pool: &mut Vec<Variable>) {
                         }
                     };
 
-                    let mut position = 0;
-                    for var in pool.iter() {
-                        if var.nome == variavel {
-                            break;
-                        }
-                        position += 1;
-                    }
-
-                    if position == pool.len() {
-                        println!("Variável '{}' não encontrada para alteração.", variavel);
-                        return;
-                    }
-
-                    let novo_valor = format!("{} / {}", pool[position].nome, novo_valor);
+                    let novo_valor = format!("{} / {}", variavel, novo_valor);
                     let novo_valor = &novo_valor;
 
-                    change_var_value(pool, position, novo_valor);
+                    change_var_value(variaveis, variavel, novo_valor);
                 }
                 "++" => {
                     let (variavel, _) = match resto.split_once("++") {
@@ -183,20 +121,7 @@ pub fn no_method(resto: &str, pool: &mut Vec<Variable>) {
                         }
                     };
 
-                    let mut position = 0;
-                    for var in pool.iter() {
-                        if var.nome == variavel {
-                            break;
-                        }
-                        position += 1;
-                    }
-
-                    if position == pool.len() {
-                        println!("Variável '{}' não encontrada para alteração.", variavel);
-                        return;
-                    }
-
-                    soma_1(pool, position);
+                    soma_1(variaveis, variavel);
                 }
                 "--" => {
                     let (variavel, _) = match resto.split_once("--") {
@@ -206,20 +131,7 @@ pub fn no_method(resto: &str, pool: &mut Vec<Variable>) {
                         }
                     };
 
-                    let mut position = 0;
-                    for var in pool.iter() {
-                        if var.nome == variavel {
-                            break;
-                        }
-                        position += 1;
-                    }
-
-                    if position == pool.len() {
-                        println!("Variável '{}' não encontrada para alteração.", variavel);
-                        return;
-                    }
-
-                    subtrai_1(pool, position);
+                    subtrai_1(variaveis, variavel);
                 }
                 _ => {}
             }

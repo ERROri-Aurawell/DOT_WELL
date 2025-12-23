@@ -1,17 +1,27 @@
+use crate::Escopo;
 use crate::v1::extract_macros::{
     extract_b_macro, extract_m_macro, extract_t_macro, extract_v_macro,
 };
-
-use evalexpr::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::v1::var_maker::*;
+use crate::v2::parse_values::catch_real_values;
+use evalexpr::*;
 
-pub fn eval_m(s: &str, pool: &Vec<Variable>) -> Result<f64, String> {
+/*
+pub fn eval_m(s: &str, variaveis: &mut Rc<RefCell<Escopo>>) -> Result<f64, String> {
     let mut result = s.to_string();
 
     while let Some((start, end, var_name)) = extract_v_macro(&result) {
-        let var_value = find_var_value(&var_name, pool)?;
-        result.replace_range(start..end, &var_value);
+        //let var_value = find_var_value(&var_name, pool)?;
+        let var_existente = variaveis.borrow().buscar(&var_name);
+        match var_existente {
+            Some(r) => {
+                result.replace_range(start..end, &);
+            }
+            None =>{}
+        }
     }
 
     loop {
@@ -61,10 +71,32 @@ pub fn eval_b(s: &str, pool: &Vec<Variable>) -> Result<bool, String> {
         }
     }
 }
+*/
 
-pub fn transform_to_string(s: &str, pool: &Vec<Variable>) -> Result<String, String> {
+pub fn transform_to_string(s: &str, vars: &mut Rc<RefCell<Escopo>>) -> Result<String, String> {
     let mut result = s.to_string();
 
+    // 1️⃣ buscar variável existente (para pegar o tipo)
+    let var_existente = match vars.borrow().buscar(s) {
+        Some(v) => v,
+        None => {
+            // If the variable is not found, assume it's a literal string or an expression that doesn't involve a direct variable lookup for its type.
+            return catch_real_values(s, vars, 6).map(|val| match val { Values::String(s) => s, _ => s.to_string() }); // Assuming 6 is the type for String
+        }
+    };
+
+    // 2️⃣ avaliar expressão com base no tipo da variável
+    let valor = match catch_real_values(novo_valor, variaveis, var_existente.tipo as u8) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("Erro ao avaliar '{}': {}", novo_valor, e);
+            return;
+        }
+    };
+
+    Ok(match valor { Values::String(s) => s, _ => valor.to_string() })
+
+    /*
     while let Some((start, end, var_name)) = extract_v_macro(&result) {
         let var_value = find_var_value(&var_name, pool)?;
         result.replace_range(start..end, &var_value);
@@ -85,6 +117,6 @@ pub fn transform_to_string(s: &str, pool: &Vec<Variable>) -> Result<String, Stri
         result.replace_range(start..end, &inner_value);
     }
     //println!("Transformado para String: {}", result);
+    */
 
-    Ok(result)
 }
